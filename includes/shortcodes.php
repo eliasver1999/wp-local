@@ -1,134 +1,165 @@
 <?php
-// Shortcode for card creation form
-add_shortcode('personalized_cards_form', 'pc_card_form_shortcode');
-function pc_card_form_shortcode() {
-    if (!is_user_logged_in()) {
-        return '<div class="pc-login-notice">
-            <p>' . __('Please log in to create personalized cards.', 'personalized-cards') . '</p>
-            <a href="' . wp_login_url(get_permalink()) . '" class="pc-login-btn">' . __('Login', 'personalized-cards') . '</a>
-        </div>';
+// [pc_login] — login page shortcode; redirects logged-in users to My Card page
+add_shortcode('pc_login', 'pc_login_shortcode');
+function pc_login_shortcode() {
+    if (is_user_logged_in()) {
+        $my_card_page_id = get_option('pc_my_card_page_id');
+        $redirect_url = $my_card_page_id ? get_permalink($my_card_page_id) : home_url('/my-card/');
+        wp_safe_redirect($redirect_url);
+        exit;
     }
-    
-    $user_id = get_current_user_id();
-    
-    if (!PC_Subscription_Handler::can_create_card($user_id)) {
-        return '<div class="pc-subscription-notice">
-            <p>' . __('You need an active membership to create cards.', 'personalized-cards') . '</p>
-            <p>' . __('Please contact an administrator to activate your membership.', 'personalized-cards') . '</p>
-        </div>';
-    }
-    
-    $subscription_level = PC_Subscription_Handler::get_user_subscription_level($user_id);
-    $templates = PC_Card_Creator::get_available_templates($subscription_level);
-    $expiry_date = get_user_meta($user_id, 'pc_subscription_expiry', true);
-    
+
+    $login_page_id = get_option('pc_login_page_id');
+    $redirect_after = get_option('pc_my_card_page_id') ? get_permalink(get_option('pc_my_card_page_id')) : home_url('/my-card/');
+
     ob_start();
     ?>
-    <div class="pc-card-creator">
-        <h2><?php _e('Create Your Personalized Card', 'personalized-cards'); ?></h2>
-        
-        <?php if ($expiry_date): ?>
-        <div class="pc-membership-info">
-            <p><?php _e('Your membership expires on:', 'personalized-cards'); ?> <strong><?php echo date('F j, Y', strtotime($expiry_date)); ?></strong></p>
-        </div>
-        <?php endif; ?>
-        
-        <form id="pc-card-form" method="post">
-            <?php wp_nonce_field('pc_create_card', 'pc_nonce'); ?>
-            
-            <div class="pc-form-group">
-                <label for="pc-template"><?php _e('Choose Template:', 'personalized-cards'); ?></label>
-                <select name="template" id="pc-template" required>
-                    <option value=""><?php _e('Select a template', 'personalized-cards'); ?></option>
-                    <?php foreach ($templates as $template): ?>
-                        <option value="<?php echo esc_attr($template['file']); ?>"><?php echo esc_html($template['name']); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-            
-            <div class="pc-template-preview" id="pc-template-preview"></div>
-            
-            <div class="pc-form-group">
-                <label for="pc-name"><?php _e('Name:', 'personalized-cards'); ?></label>
-                <input type="text" name="name" id="pc-name" maxlength="50" required placeholder="<?php _e('Enter name for the card', 'personalized-cards'); ?>">
-            </div>
-            
-            <div class="pc-form-group">
-                <label for="pc-message"><?php _e('Message:', 'personalized-cards'); ?></label>
-                <textarea name="message" id="pc-message" rows="4" maxlength="200" placeholder="<?php _e('Enter your personalized message (optional)', 'personalized-cards'); ?>"></textarea>
-            </div>
-            
-            <div class="pc-form-group">
-                <label for="pc-date"><?php _e('Date:', 'personalized-cards'); ?></label>
-                <input type="date" name="date" id="pc-date">
-            </div>
-            
-            <div class="pc-form-group">
-                <label>
-                    <input type="checkbox" name="send_email" id="pc-send-email" value="1" checked>
-                    <?php _e('Send card to my email', 'personalized-cards'); ?>
-                </label>
-            </div>
-            
-            <button type="submit" class="pc-submit-btn"><?php _e('Create Card', 'personalized-cards'); ?></button>
-        </form>
-        
-        <div id="pc-result"></div>
-    </div>
-    <?php
-    return ob_get_clean();
-}
-
-// Shortcode for displaying user's cards
-add_shortcode('my_personalized_cards', 'pc_my_cards_shortcode');
-function pc_my_cards_shortcode() {
-    if (!is_user_logged_in()) {
-        return '<p>' . __('Please log in to view your cards.', 'personalized-cards') . '</p>';
-    }
-    
-    $user_id = get_current_user_id();
-    $cards = PC_Database::get_user_cards($user_id);
-    
-    ob_start();
-    ?>
-    <div class="pc-my-cards">
-        <h2><?php _e('My Cards', 'personalized-cards'); ?></h2>
-        
-        <?php if (empty($cards)): ?>
-            <p><?php _e('You haven\'t created any cards yet.', 'personalized-cards'); ?></p>
-        <?php else: ?>
-            <div class="pc-cards-grid">
-                <?php foreach ($cards as $card): ?>
-                    <div class="pc-card-item">
-                        <?php if ($card->card_image): ?>
-                            <img src="<?php echo esc_url($card->card_image); ?>" alt="Card">
-                        <?php endif; ?>
-                        <div class="pc-card-info">
-                            <p><strong><?php _e('Created:', 'personalized-cards'); ?></strong> <?php echo date('F j, Y', strtotime($card->created_at)); ?></p>
-                            <a href="<?php echo esc_url($card->card_image); ?>" download class="pc-download-btn"><?php _e('Download', 'personalized-cards'); ?></a>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </div>
-    <?php
-    return ob_get_clean();
-}
-add_shortcode('pc_dashboard', function () {
-
-    ob_start();
-
-    if (!is_user_logged_in()) {
-
+    <div class="pc-login-wrap">
+        <?php
+        if (isset($_GET['login']) && $_GET['login'] === 'failed') {
+            echo '<p class="pc-login-error">' . __('Invalid username or password. Please try again.', 'personalized-cards') . '</p>';
+        }
         wp_login_form(array(
-            'redirect' => get_permalink()
+            'redirect'       => esc_url($redirect_after),
+            'label_username' => __('Username or Email', 'personalized-cards'),
+            'label_password' => __('Password', 'personalized-cards'),
+            'label_remember' => __('Keep me logged in', 'personalized-cards'),
+            'label_log_in'   => __('Log In', 'personalized-cards'),
+            'remember'       => true,
         ));
+        ?>
+    </div>
+    <?php
+    return ob_get_clean();
+}
 
-    } else {
-
-        echo do_shortcode('[my_personalized_cards]');
+// [pc_my_card] — shows user's card with download and wallet options
+add_shortcode('pc_my_card', 'pc_my_card_shortcode');
+function pc_my_card_shortcode() {
+    if (!is_user_logged_in()) {
+        $login_page_id = get_option('pc_login_page_id');
+        $login_url = $login_page_id ? get_permalink($login_page_id) : wp_login_url(get_permalink());
+        wp_safe_redirect($login_url);
+        exit;
     }
 
+    $user_id = get_current_user_id();
+    $user    = wp_get_current_user();
+    $cards   = PC_Database::get_user_cards($user_id);
+
+    $is_active   = get_user_meta($user_id, 'pc_subscription_active', true);
+    $expiry_date = get_user_meta($user_id, 'pc_subscription_expiry', true);
+    $days_left   = $expiry_date ? floor((strtotime($expiry_date) - time()) / DAY_IN_SECONDS) : 0;
+    $is_expired  = ($is_active !== '1') || ($expiry_date && $days_left <= 0);
+
+    // Auto-deactivate silently if expired
+    if ($is_expired && $is_active === '1') {
+        update_user_meta($user_id, 'pc_subscription_active', '0');
+    }
+
+    ob_start();
+    ?>
+    <div class="pc-my-card-wrap">
+        <div class="pc-member-info">
+            <p><?php echo esc_html(sprintf(__('Welcome, %s', 'personalized-cards'), $user->display_name)); ?></p>
+            <?php if (!$is_expired): ?>
+                <p class="pc-expiry-notice">
+                    <?php echo esc_html(sprintf(__('Membership active — expires %s (%d days left)', 'personalized-cards'), date_i18n('F j, Y', strtotime($expiry_date)), $days_left)); ?>
+                </p>
+            <?php else: ?>
+                <p class="pc-expiry-notice pc-expired">
+                    <?php _e('Your membership has expired. Please contact an administrator to renew.', 'personalized-cards'); ?>
+                </p>
+            <?php endif; ?>
+        </div>
+
+        <?php if (empty($cards)): ?>
+            <p class="pc-no-card"><?php _e('Your card has not been created yet. Please check back later.', 'personalized-cards'); ?></p>
+        <?php else:
+            $latest = $cards[0];
+            ?>
+            <div class="pc-card-display">
+                <?php if ($latest->card_image): ?>
+                    <div class="pc-card-image-wrap <?php echo $is_expired ? 'pc-card-expired' : ''; ?>">
+                        <img src="<?php echo esc_url($latest->card_image); ?>" alt="<?php esc_attr_e('Your Membership Card', 'personalized-cards'); ?>">
+                        <?php if ($is_expired): ?>
+                            <div class="pc-expired-overlay" aria-hidden="true">
+                                <span><?php _e('EXPIRED', 'personalized-cards'); ?></span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="pc-card-actions">
+                    <?php if ($latest->card_image && !$is_expired): ?>
+                        <a href="<?php echo esc_url($latest->card_image); ?>" download class="pc-btn pc-btn-download">
+                            <?php _e('Download Card', 'personalized-cards'); ?>
+                        </a>
+                    <?php elseif ($latest->card_image && $is_expired): ?>
+                        <span class="pc-btn pc-btn-disabled" title="<?php esc_attr_e('Renew your membership to download', 'personalized-cards'); ?>">
+                            <?php _e('Download Card', 'personalized-cards'); ?>
+                        </span>
+                    <?php endif; ?>
+
+                    <?php if (get_option('pc_enable_apple_wallet') && !$is_expired): ?>
+                        <button class="pc-btn pc-btn-apple-wallet" data-card-id="<?php echo esc_attr($latest->id); ?>">
+                            <?php _e('Add to Apple Wallet', 'personalized-cards'); ?>
+                        </button>
+                    <?php endif; ?>
+
+                    <?php if (get_option('pc_enable_google_wallet') && !$is_expired): ?>
+                        <?php
+                        $card_data = json_decode($latest->card_data, true);
+                        $gw_link   = PC_Wallet_Handler::create_simple_google_wallet_link($card_data ?: array('name' => $user->display_name), $latest->card_image);
+                        if ($gw_link): ?>
+                            <a href="<?php echo esc_url($gw_link); ?>" target="_blank" class="pc-btn pc-btn-google-wallet">
+                                <?php _e('Add to Google Wallet', 'personalized-cards'); ?>
+                            </a>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php if ($is_expired): ?>
+                        <p class="pc-renew-msg"><?php _e('Contact an administrator to renew your membership and restore full access.', 'personalized-cards'); ?></p>
+                    <?php endif; ?>
+                </div>
+
+                <p class="pc-card-date">
+                    <?php echo esc_html(sprintf(__('Issued: %s', 'personalized-cards'), date_i18n('F j, Y', strtotime($latest->created_at)))); ?>
+                </p>
+            </div>
+
+            <?php if (count($cards) > 1): ?>
+                <div class="pc-previous-cards">
+                    <h3><?php _e('Previous Cards', 'personalized-cards'); ?></h3>
+                    <div class="pc-cards-grid">
+                        <?php foreach (array_slice($cards, 1) as $card): ?>
+                            <div class="pc-card-item">
+                                <?php if ($card->card_image): ?>
+                                    <img src="<?php echo esc_url($card->card_image); ?>" alt="Card">
+                                <?php endif; ?>
+                                <p><?php echo esc_html(date_i18n('F j, Y', strtotime($card->created_at))); ?></p>
+                                <?php if ($card->card_image): ?>
+                                    <a href="<?php echo esc_url($card->card_image); ?>" download class="pc-btn pc-btn-download-sm">
+                                        <?php _e('Download', 'personalized-cards'); ?>
+                                    </a>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
+        <?php endif; ?>
+
+        <p class="pc-logout-link">
+            <a href="<?php echo esc_url(wp_logout_url(get_permalink(get_option('pc_login_page_id')))); ?>">
+                <?php _e('Log Out', 'personalized-cards'); ?>
+            </a>
+        </p>
+    </div>
+    <?php
     return ob_get_clean();
-});
+}
+
+// Legacy shortcodes kept for backward compatibility but hidden from users
+add_shortcode('my_personalized_cards', 'pc_my_card_shortcode');
+add_shortcode('pc_dashboard', 'pc_my_card_shortcode');

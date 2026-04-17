@@ -1,93 +1,76 @@
 <?php
 class PC_Card_Creator {
-    
+
     public static function create_personalized_card($template_path, $data, $output_path) {
-        // Check if GD library is available
         if (!extension_loaded('gd')) {
             return new WP_Error('gd_missing', 'GD library is not installed');
         }
-        
-        // Load the template image
+
         $image = imagecreatefromjpeg($template_path);
         if (!$image) {
             return new WP_Error('image_load_failed', 'Failed to load template image');
         }
-        
-        // Set up text color (black)
-        $text_color = imagecolorallocate($image, 0, 0, 0);
-        
-        // Set up font path (use a TrueType font)
-        $font_path = PC_PLUGIN_DIR . 'assets/fonts/arial.ttf';
-        
-        // Check if font exists, if not use built-in font
+
+        $font_file = get_option('pc_font_file', 'arial.ttf');
+        $font_path = PC_PLUGIN_DIR . 'assets/fonts/' . $font_file;
+        // Fall back to any available ttf if the saved one is gone
+        if (!file_exists($font_path)) {
+            $found = glob(PC_PLUGIN_DIR . 'assets/fonts/*.ttf');
+            $font_path = $found ? $found[0] : $font_path;
+        }
         $use_ttf = file_exists($font_path);
-        
-        // Add personalized text to the card
-        if (isset($data['name'])) {
-            if ($use_ttf) {
-                imagettftext($image, 24, 0, 100, 150, $text_color, $font_path, $data['name']);
-            } else {
-                imagestring($image, 5, 100, 150, $data['name'], $text_color);
-            }
+
+        // Draw name field
+        if (!empty($data['name']) && get_option('pc_field_name_enabled', '1') === '1') {
+            self::draw_text(
+                $image, $use_ttf, $font_path,
+                $data['name'],
+                (int) get_option('pc_field_name_x',    100),
+                (int) get_option('pc_field_name_y',    150),
+                (int) get_option('pc_field_name_size',  24),
+                get_option('pc_field_name_color', '#000000')
+            );
         }
-        
-        if (isset($data['message']) && !empty($data['message'])) {
-            // Word wrap for longer messages
-            $wrapped_text = wordwrap($data['message'], 40, "\n");
-            $lines = explode("\n", $wrapped_text);
-            $y_position = 250;
-            
-            foreach ($lines as $line) {
-                if ($use_ttf) {
-                    imagettftext($image, 16, 0, 100, $y_position, $text_color, $font_path, $line);
-                } else {
-                    imagestring($image, 3, 100, $y_position, $line, $text_color);
-                }
-                $y_position += 30;
-            }
+
+        // Draw expiry date field
+        if (!empty($data['date']) && get_option('pc_field_expiry_enabled', '1') === '1') {
+            $fmt            = get_option('pc_field_expiry_format', 'd/m/Y');
+            $formatted_date = date($fmt, strtotime($data['date']));
+            self::draw_text(
+                $image, $use_ttf, $font_path,
+                $formatted_date,
+                (int) get_option('pc_field_expiry_x',    100),
+                (int) get_option('pc_field_expiry_y',    220),
+                (int) get_option('pc_field_expiry_size',  18),
+                get_option('pc_field_expiry_color', '#000000')
+            );
         }
-        
-        if (isset($data['date']) && !empty($data['date'])) {
-            $formatted_date = date('F j, Y', strtotime($data['date']));
-            if ($use_ttf) {
-                imagettftext($image, 14, 0, 100, 500, $text_color, $font_path, $formatted_date);
-            } else {
-                imagestring($image, 2, 100, 500, $formatted_date, $text_color);
-            }
-        }
-        
-        // Save the image
+
         $result = imagejpeg($image, $output_path, 90);
         imagedestroy($image);
-        
-        return $result ? $output_path : new WP_Error('save_failed', 'Failed to save image');
+
+        return $result ? $output_path : new WP_Error('save_failed', 'Failed to save card image');
     }
-    
-    public static function get_available_templates($subscription_level) {
-        $templates_dir = PC_PLUGIN_DIR . 'templates/cards/';
-        $templates = array();
-        
-        // Define template access based on subscription
-        $template_access = array(
-            'basic' => array('template-basic.jpg'),
-            'premium' => array('template-basic.jpg', 'template-premium.jpg', 'template-special.jpg'),
-            'vip' => array('template-basic.jpg', 'template-premium.jpg', 'template-special.jpg', 'template-vip.jpg', 'template-exclusive.jpg')
-        );
-        
-        $allowed_templates = isset($template_access[$subscription_level]) ? 
-            $template_access[$subscription_level] : 
-            $template_access['basic'];
-        
-        foreach ($allowed_templates as $template_file) {
-            if (file_exists($templates_dir . $template_file)) {
-                $templates[] = array(
-                    'file' => $template_file,
-                    'url' => PC_PLUGIN_URL . 'templates/cards/' . $template_file,
-                    'name' => ucfirst(str_replace(array('template-', '.jpg'), '', $template_file))
-                );
-            }
+
+    private static function draw_text($image, $use_ttf, $font_path, $text, $x, $y, $size, $hex_color) {
+        $color = self::hex_to_gd_color($image, $hex_color);
+
+        if ($use_ttf) {
+            imagettftext($image, $size, 0, $x, $y, $color, $font_path, $text);
+        } else {
+            // Fall back to built-in bitmap font (no size/color control)
+            imagestring($image, 5, $x, $y, $text, $color);
         }
-        
-        return $templates;
+    }
+
+    private static function hex_to_gd_color($image, $hex) {
+        $hex = ltrim($hex, '#');
+        if (strlen($hex) === 3) {
+            $hex = $hex[0].$hex[0].$hex[1].$hex[1].$hex[2].$hex[2];
+        }
+        $r = hexdec(substr($hex, 0, 2));
+        $g = hexdec(substr($hex, 2, 2));
+        $b = hexdec(substr($hex, 4, 2));
+        return imagecolorallocate($image, $r, $g, $b);
     }
 }

@@ -40,15 +40,50 @@ if (file_exists(PC_PLUGIN_DIR . 'vendor/autoload.php')) {
 register_activation_hook(__FILE__, 'pc_activate_plugin');
 function pc_activate_plugin() {
     PC_Database::create_tables();
-    
+
     // Create uploads directory for cards
     $upload_dir = wp_upload_dir();
     $cards_dir = $upload_dir['basedir'] . '/personalized-cards';
     if (!file_exists($cards_dir)) {
         wp_mkdir_p($cards_dir);
     }
-    
+
+    pc_create_plugin_pages();
     flush_rewrite_rules();
+}
+
+function pc_create_plugin_pages() {
+    $pages = array(
+        array(
+            'title'   => 'Member Login',
+            'slug'    => 'member-login',
+            'content' => '[pc_login]',
+            'option'  => 'pc_login_page_id',
+        ),
+        array(
+            'title'   => 'My Card',
+            'slug'    => 'my-card',
+            'content' => '[pc_my_card]',
+            'option'  => 'pc_my_card_page_id',
+        ),
+    );
+
+    foreach ($pages as $page) {
+        $existing_id = get_option($page['option']);
+        if ($existing_id && get_post_status($existing_id)) {
+            continue;
+        }
+        $page_id = wp_insert_post(array(
+            'post_title'   => $page['title'],
+            'post_name'    => $page['slug'],
+            'post_content' => $page['content'],
+            'post_status'  => 'publish',
+            'post_type'    => 'page',
+        ));
+        if ($page_id && !is_wp_error($page_id)) {
+            update_option($page['option'], $page_id);
+        }
+    }
 }
 
 // Deactivation hook
@@ -79,15 +114,18 @@ function pc_enqueue_scripts() {
 // Enqueue admin scripts
 add_action('admin_enqueue_scripts', 'pc_admin_enqueue_scripts');
 function pc_admin_enqueue_scripts($hook) {
-    if ($hook !== 'toplevel_page_personalized-cards' && $hook !== 'users.php' && $hook !== 'user-edit.php' && $hook !== 'profile.php') {
+    $is_plugin_page = (strpos($hook, 'personalized-cards') !== false);
+    $is_user_page   = in_array($hook, array('users.php', 'user-edit.php', 'profile.php'), true);
+
+    if (!$is_plugin_page && !$is_user_page) {
         return;
     }
-    
+
     wp_enqueue_style('pc-admin-styles', PC_PLUGIN_URL . 'assets/css/admin-styles.css', array(), PC_VERSION);
     wp_enqueue_script('pc-admin-scripts', PC_PLUGIN_URL . 'assets/js/admin-scripts.js', array('jquery'), PC_VERSION, true);
-    
+
     wp_localize_script('pc-admin-scripts', 'pcAdminAjax', array(
         'ajaxurl' => admin_url('admin-ajax.php'),
-        'nonce' => wp_create_nonce('pc_admin_nonce')
+        'nonce'   => wp_create_nonce('pc_admin_nonce'),
     ));
 }

@@ -56,3 +56,78 @@
     max-width: 100px;
     height: auto;
 }
+
+.pc-admin-section {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 20px 24px;
+    margin: 24px 0;
+}
+
+.pc-admin-section h2 {
+    margin-top: 0;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.pc-notice-warn {
+    background: #fff3cd;
+    border-left: 4px solid #ffc107;
+    padding: 10px 14px;
+    border-radius: 0 4px 4px 0;
+}
+
+/* Template gallery */
+.pc-template-gallery {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.pc-template-thumb {
+    border: 2px solid #dcdcde;
+    border-radius: 4px;
+    padding: 8px;
+    text-align: center;
+    background: #fafafa;
+    max-width: 160px;
+}
+
+.pc-template-thumb img {
+    max-width: 140px;
+    height: auto;
+    display: block;
+    margin: 0 auto 6px;
+}
+
+.pc-template-thumb p {
+    font-size: 11px;
+    color: #555;
+    margin: 0 0 6px;
+    word-break: break-all;
+}
+
+.pc-template-thumb.pc-template-active {
+    border-color: #0073aa;
+    background: #e7f3ff;
+}
+
+.pc-badge-active {
+    display: inline-block;
+    background: #0073aa;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+/* Text layout editor */
+.pc-text-layout-editor {
+    background: #f9f9f9;
+    border: 1px solid #dcdcde;
+    border-radius: 4px;
+    padding: 16px 20px;
+    margin: 12px 0 20px;
+}
