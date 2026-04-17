@@ -1,0 +1,58 @@
+/* Personalized Cards Creator - Admin Styles */
+
+.pc-admin-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin: 30px 0;
+}
+
+.pc-stat-box {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 8px;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.pc-stat-box h3 {
+    font-size: 36px;
+    margin: 0 0 10px 0;
+    color: white;
+}
+
+.pc-stat-box p {
+    margin: 0;
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.pc-stat-box:nth-child(2) {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.pc-stat-box:nth-child(3) {
+    background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+}
+
+.pc-stat-box:nth-child(4) {
+    background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+}
+
+.pc-delete-card {
+    color: #a00;
+}
+
+.pc-delete-card:hover {
+    color: #dc3232;
+}
+
+.form-table th {
+    width: 200px;
+}
+
+.wp-list-table img {
+    max-width: 100px;
+    height: auto;
+}

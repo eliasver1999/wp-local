@@ -1,0 +1,78 @@
+PERSONALIZED CARDS CREATOR - INSTALLATION GUIDE
+================================================
+
+QUICK START (5 Minutes):
+
+1. INSTALL PLUGIN
+   - Upload plugin to /wp-content/plugins/
+   - Activate in WordPress Admin
+
+2. ADD TEMPLATES
+   - Create JPEG images (800x500px recommended)
+   - Name them: template-basic.jpg, template-premium.jpg
+   - Upload to: /wp-content/plugins/personalized-cards/templates/cards/
+
+3. ADD FONT (Optional)
+   - Download arial.ttf or any TrueType font
+   - Upload to: /wp-content/plugins/personalized-cards/assets/fonts/
+
+4. CONFIGURE
+   - Go to: Personalized Cards → Settings
+   - Set: From Name, From Email, Subject, Message
+   - Save Settings
+
+5. CREATE TEST MEMBER
+   - Go to: Users → Add New
+   - Create user: testuser / testpass
+   - Edit user profile
+   - Check: "Enable 2-year membership"
+   - Save
+
+6. CREATE PAGES
+   - Create page: "Create Card"
+   - Add shortcode: [personalized_cards_form]
+   - Publish
+   
+   - Create page: "My Cards"
+   - Add shortcode: [my_personalized_cards]
+   - Publish
+
+7. TEST
+   - Logout admin
+   - Login as testuser
+   - Visit "Create Card" page
+   - Create a card!
+
+DONE! 🎉
+
+TESTING CHECKLIST:
+☐ Plugin activated
+☐ Templates uploaded
+☐ Font added
+☐ Settings configured
+☐ Test user created
+☐ Membership granted
+☐ Pages created
+☐ Card created successfully
+☐ Email received
+☐ Download works
+
+TROUBLESHOOTING:
+
+Problem: No templates showing
+Solution: Check templates/cards/ folder has .jpg files
+
+Problem: Text not showing on card
+Solution: Add arial.ttf to assets/fonts/ folder
+
+Problem: Email not received
+Solution: Install WP Mail SMTP plugin and configure
+
+Problem: "Permission denied" error
+Solution: Check folder permissions (755 for folders, 644 for files)
+
+Problem: Image looks bad
+Solution: Use higher resolution templates (minimum 800x500px)
+
+NEED HELP?
+Check README.txt for detailed documentation.
