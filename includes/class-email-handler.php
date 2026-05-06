@@ -1,7 +1,7 @@
 <?php
 class PC_Email_Handler {
     
-    public static function send_card_email($user_email, $user_name, $card_image_path) {
+    public static function send_card_email($user_email, $user_name, $card_image_path, $google_wallet_url = '', $card_back_image_path = '') {
         $from_name = get_option('pc_email_from_name', get_bloginfo('name'));
         $from_email = get_option('pc_email_from_address', get_bloginfo('admin_email'));
         $subject = get_option('pc_email_subject', __('Your Personalized Card', 'personalized-cards'));
@@ -42,10 +42,20 @@ class PC_Email_Handler {
                     <p>Dear ' . esc_html($user_name) . ',</p>
                     <p>' . wp_kses_post($message) . '</p>
                     <div class="card-preview">
-                        <p><strong>Card Preview:</strong></p>
-                        <img src="cid:card_image" alt="Your Card" style="max-width: 100%; height: auto;">
+                        <p><strong>Card Front:</strong></p>
+                        <img src="cid:card_image" alt="Card Front" style="max-width: 100%; height: auto;">
+                        ' . ($card_back_image_path && file_exists($card_back_image_path) ? '
+                        <p style="margin-top:16px;"><strong>Card Back:</strong></p>
+                        <img src="cid:card_back_image" alt="Card Back" style="max-width: 100%; height: auto;">' : '') . '
                     </div>
                     <p>Your personalized card is attached to this email. You can download it for printing or sharing on social media.</p>
+                    ' . ($google_wallet_url ? '
+                    <div style="text-align:center;margin:24px 0;">
+                        <a href="' . esc_url($google_wallet_url) . '" target="_blank"
+                           style="display:inline-block;background:#000;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:15px;font-family:Arial,sans-serif;">
+                            🎫 Add to Google Wallet
+                        </a>
+                    </div>' : '') . '
                 </div>
                 <div class="footer">
                     <p>&copy; ' . date('Y') . ' ' . esc_html(get_bloginfo('name')) . '. All rights reserved.</p>
@@ -54,18 +64,26 @@ class PC_Email_Handler {
         </body>
         </html>';
         
-        // Use WordPress PHPMailer
-        add_action('phpmailer_init', function($phpmailer) use ($card_image_path) {
-            // Add inline image
+        // Use WordPress PHPMailer. Bind to a named callback so we can remove it
+        // after sending — otherwise repeated calls (bulk send) accumulate
+        // closures and every recipient gets every previous user's attachments.
+        $attach_cb = function($phpmailer) use ($card_image_path, $card_back_image_path) {
+            $phpmailer->clearAttachments();
             if (file_exists($card_image_path)) {
                 $phpmailer->AddEmbeddedImage($card_image_path, 'card_image', basename($card_image_path));
-                // Also attach as file
                 $phpmailer->AddAttachment($card_image_path, basename($card_image_path));
             }
-        });
-        
+            if ($card_back_image_path && file_exists($card_back_image_path)) {
+                $phpmailer->AddEmbeddedImage($card_back_image_path, 'card_back_image', basename($card_back_image_path));
+                $phpmailer->AddAttachment($card_back_image_path, basename($card_back_image_path));
+            }
+        };
+        add_action('phpmailer_init', $attach_cb);
+
         $sent = wp_mail($user_email, $subject, $html_message, $headers);
-        
+
+        remove_action('phpmailer_init', $attach_cb);
+
         return $sent;
     }
 }

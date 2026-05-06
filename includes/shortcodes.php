@@ -15,6 +15,7 @@ function pc_login_shortcode() {
     ob_start();
     ?>
     <div class="pc-login-wrap">
+        <h2 class="pc-login-title"><?php _e('Member Login', 'personalized-cards'); ?></h2>
         <?php
         if (isset($_GET['login']) && $_GET['login'] === 'failed') {
             echo '<p class="pc-login-error">' . __('Invalid username or password. Please try again.', 'personalized-cards') . '</p>';
@@ -90,6 +91,12 @@ function pc_my_card_shortcode() {
                     </div>
                 <?php endif; ?>
 
+                <?php if (!empty($latest->card_back_image)): ?>
+                    <div class="pc-card-image-wrap pc-card-back" style="margin-top:12px;">
+                        <img src="<?php echo esc_url($latest->card_back_image); ?>" alt="<?php esc_attr_e('Card Back', 'personalized-cards'); ?>">
+                    </div>
+                <?php endif; ?>
+
                 <div class="pc-card-actions">
                     <?php if ($latest->card_image && !$is_expired): ?>
                         <a href="<?php echo esc_url($latest->card_image); ?>" download class="pc-btn pc-btn-download">
@@ -109,8 +116,9 @@ function pc_my_card_shortcode() {
 
                     <?php if (get_option('pc_enable_google_wallet') && !$is_expired): ?>
                         <?php
-                        $card_data = json_decode($latest->card_data, true);
-                        $gw_link   = PC_Wallet_Handler::create_simple_google_wallet_link($card_data ?: array('name' => $user->display_name), $latest->card_image);
+                        $card_data = json_decode($latest->card_data, true) ?: array('name' => $user->display_name);
+                        $gw_link   = PC_Wallet_Handler::create_google_wallet_link($card_data, $user_id, $latest->card_image);
+                        $gw_link   = is_wp_error($gw_link) ? false : $gw_link;
                         if ($gw_link): ?>
                             <a href="<?php echo esc_url($gw_link); ?>" target="_blank" class="pc-btn pc-btn-google-wallet">
                                 <?php _e('Add to Google Wallet', 'personalized-cards'); ?>

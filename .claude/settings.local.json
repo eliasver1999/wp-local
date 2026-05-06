@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node manual.js)",
+      "Bash(npm install *)",
+      "Bash(soffice --headless --convert-to pdf Personalized-Cards-User-Manual.pptx)",
+      "Bash(powershell -Command \"& 'C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe' --version\")",
+      "Bash(where python *)",
+      "PowerShell(pip install pdf2image Pillow 2>&1)"
+    ]
+  }
+}

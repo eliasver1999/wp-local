@@ -22,12 +22,16 @@ define('PC_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Include required files
 require_once PC_PLUGIN_DIR . 'includes/class-database.php';
+require_once PC_PLUGIN_DIR . 'includes/class-activity-log.php';
 require_once PC_PLUGIN_DIR . 'includes/class-card-creator.php';
 require_once PC_PLUGIN_DIR . 'includes/class-subscription-handler.php';
 require_once PC_PLUGIN_DIR . 'includes/class-email-handler.php';
 require_once PC_PLUGIN_DIR . 'includes/class-wallet-handler.php';
+require_once PC_PLUGIN_DIR . 'includes/class-cron.php';
 require_once PC_PLUGIN_DIR . 'includes/admin/admin-page.php';
 require_once PC_PLUGIN_DIR . 'includes/admin/user-subscription.php';
+require_once PC_PLUGIN_DIR . 'includes/admin/import-page.php';
+require_once PC_PLUGIN_DIR . 'includes/admin/activity-log-page.php';
 require_once PC_PLUGIN_DIR . 'includes/shortcodes.php';
 require_once PC_PLUGIN_DIR . 'includes/ajax-handlers.php';
 
@@ -40,6 +44,8 @@ if (file_exists(PC_PLUGIN_DIR . 'vendor/autoload.php')) {
 register_activation_hook(__FILE__, 'pc_activate_plugin');
 function pc_activate_plugin() {
     PC_Database::create_tables();
+    PC_Activity_Log::create_table();
+    PC_Cron::register();
 
     // Create uploads directory for cards
     $upload_dir = wp_upload_dir();
@@ -89,6 +95,7 @@ function pc_create_plugin_pages() {
 // Deactivation hook
 register_deactivation_hook(__FILE__, 'pc_deactivate_plugin');
 function pc_deactivate_plugin() {
+    PC_Cron::unregister();
     flush_rewrite_rules();
 }
 
@@ -96,6 +103,9 @@ function pc_deactivate_plugin() {
 add_action('plugins_loaded', 'pc_init_plugin');
 function pc_init_plugin() {
     load_plugin_textdomain('personalized-cards', false, dirname(plugin_basename(__FILE__)) . '/languages');
+    PC_Database::maybe_add_back_image_column();
+    PC_Activity_Log::create_table(); // idempotent — creates if missing
+    PC_Cron::register();             // schedules if not already scheduled
 }
 
 // Enqueue scripts and styles
