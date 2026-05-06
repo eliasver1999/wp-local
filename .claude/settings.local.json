@@ -6,7 +6,8 @@
       "Bash(soffice --headless --convert-to pdf Personalized-Cards-User-Manual.pptx)",
       "Bash(powershell -Command \"& 'C:\\\\Program Files\\\\LibreOffice\\\\program\\\\soffice.exe' --version\")",
       "Bash(where python *)",
-      "PowerShell(pip install pdf2image Pillow 2>&1)"
+      "PowerShell(pip install pdf2image Pillow 2>&1)",
+      "PowerShell($paths = @\\(\"C:\\\\xampp\\\\php\\\\php.exe\",\"C:\\\\php\\\\php.exe\",\"C:\\\\Program Files\\\\PHP\\\\php.exe\"\\); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; if \\($found\\) { & $found -l \"C:\\\\Users\\\\apetr\\\\codebase\\\\wetransfer_wp-local_2026-04-28_1151\\\\wp-local\\\\includes\\\\admin\\\\admin-page.php\" } else { \"no php found\" })"
     ]
   }
 }

@@ -41,25 +41,9 @@ function pc_admin_page() {
     $active_members = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE meta_key = 'pc_subscription_active' AND meta_value = '1'");
     $total_users    = count_users();
 
-    // Handle bulk actions
-    $bulk_notice = '';
-    if (isset($_POST['pc_bulk_create_email']) && check_admin_referer('pc_bulk_actions')) {
-        $result = pc_admin_bulk_create_and_email();
-        $bulk_notice = sprintf(
-            __('Done. Created %d new card(s), emailed %d member(s), skipped %d (already had a card).', 'personalized-cards'),
-            $result['created'], $result['emailed'], $result['skipped']
-        );
-    } elseif (isset($_POST['pc_bulk_email']) && check_admin_referer('pc_bulk_actions')) {
-        $count = pc_admin_bulk_email_active_members();
-        $bulk_notice = sprintf(__('Card emails sent to %d active member(s).', 'personalized-cards'), $count);
-    }
     ?>
     <div class="wrap">
         <h1><?php _e('Personalized Cards', 'personalized-cards'); ?></h1>
-
-        <?php if ($bulk_notice): ?>
-            <div class="notice notice-success"><p><?php echo esc_html($bulk_notice); ?></p></div>
-        <?php endif; ?>
 
         <!-- Stats -->
         <div class="pc-admin-stats">
@@ -177,23 +161,32 @@ function pc_admin_page() {
         <!-- Bulk actions -->
         <div class="pc-admin-section">
             <h2><?php _e('Bulk Actions', 'personalized-cards'); ?></h2>
-            <form method="post">
-                <?php wp_nonce_field('pc_bulk_actions'); ?>
-                <p>
-                    <button type="submit" name="pc_bulk_create_email" class="button button-primary"
-                            onclick="return confirm('<?php esc_attr_e('Create a card for every active member who doesn\'t have one yet, then email all of them?', 'personalized-cards'); ?>')">
-                        <?php _e('Create & Email All Active Members', 'personalized-cards'); ?>
-                    </button>
-                    <span style="margin:0 12px;color:#aaa;">|</span>
-                    <button type="submit" name="pc_bulk_email" class="button button-secondary"
-                            onclick="return confirm('<?php esc_attr_e('Re-send card emails to all active members who already have a card?', 'personalized-cards'); ?>')">
-                        <?php _e('Re-email Existing Cards', 'personalized-cards'); ?>
-                    </button>
-                </p>
-                <p class="description">
-                    <?php _e('<strong>Create &amp; Email</strong> — generates a card for anyone missing one, then emails everyone.<br><strong>Re-email</strong> — only sends emails; does not create new cards.', 'personalized-cards'); ?>
-                </p>
-            </form>
+            <p>
+                <button type="button" id="pc-bulk-create-email" class="button button-primary"
+                        data-mode="create_email"
+                        data-confirm="<?php esc_attr_e('Create a card for every active member who doesn\'t have one yet, then email all of them?', 'personalized-cards'); ?>">
+                    <?php _e('Create & Email All Active Members', 'personalized-cards'); ?>
+                </button>
+                <span style="margin:0 12px;color:#aaa;">|</span>
+                <button type="button" id="pc-bulk-email" class="button button-secondary"
+                        data-mode="email_only"
+                        data-confirm="<?php esc_attr_e('Re-send card emails to all active members who already have a card?', 'personalized-cards'); ?>">
+                    <?php _e('Re-email Existing Cards', 'personalized-cards'); ?>
+                </button>
+            </p>
+            <p class="description">
+                <?php _e('<strong>Create &amp; Email</strong> — generates a card for anyone missing one, then emails everyone.<br><strong>Re-email</strong> — only sends emails; does not create new cards.', 'personalized-cards'); ?>
+            </p>
+
+            <div id="pc-bulk-progress" style="display:none;margin-top:18px;padding:16px;background:#fff;border:1px solid #ccd0d4;border-radius:4px;max-width:640px;">
+                <div id="pc-bulk-progress-title" style="font-weight:600;margin-bottom:8px;"></div>
+                <div style="background:#e5e5e5;border-radius:3px;overflow:hidden;height:18px;">
+                    <div id="pc-bulk-progress-bar" style="background:#0073aa;height:100%;width:0;transition:width 0.2s;"></div>
+                </div>
+                <div id="pc-bulk-progress-status" style="margin-top:8px;font-family:monospace;font-size:13px;color:#444;"></div>
+                <div id="pc-bulk-progress-counts" style="margin-top:6px;font-size:13px;color:#666;"></div>
+                <div id="pc-bulk-progress-errors" style="margin-top:8px;font-size:12px;color:#a00;max-height:120px;overflow:auto;"></div>
+            </div>
         </div>
 
         <!-- Recent cards -->
@@ -223,6 +216,138 @@ function pc_admin_page() {
                 }
                 $btn.prop('disabled', false).text('<?php esc_js(_e('Create Card', 'personalized-cards')); ?>');
             });
+        });
+
+        // ── Bulk: AJAX-driven, one user per request, with live progress ────────
+        var bulkLabels = {
+            create_email: '<?php echo esc_js(__('Creating & emailing cards', 'personalized-cards')); ?>',
+            email_only:   '<?php echo esc_js(__('Re-emailing cards', 'personalized-cards')); ?>',
+            startingFor:  '<?php echo esc_js(__('Starting…', 'personalized-cards')); ?>',
+            sending:      '<?php echo esc_js(__('Sending to', 'personalized-cards')); ?>',
+            sent:         '<?php echo esc_js(__('Sent', 'personalized-cards')); ?>',
+            done:         '<?php echo esc_js(__('Done.', 'personalized-cards')); ?>',
+            noUsers:      '<?php echo esc_js(__('No active members to process.', 'personalized-cards')); ?>',
+            failed:       '<?php echo esc_js(__('Request failed', 'personalized-cards')); ?>'
+        };
+
+        function setBar(pct) {
+            $('#pc-bulk-progress-bar').css('width', pct + '%');
+        }
+
+        function escapeHtml(s) {
+            return String(s == null ? '' : s)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        function runBulk(mode) {
+            var $allBtns = $('#pc-bulk-create-email, #pc-bulk-email');
+            var $progress = $('#pc-bulk-progress');
+            var $title    = $('#pc-bulk-progress-title');
+            var $status   = $('#pc-bulk-progress-status');
+            var $counts   = $('#pc-bulk-progress-counts');
+            var $errors   = $('#pc-bulk-progress-errors');
+
+            $allBtns.prop('disabled', true);
+            $progress.show();
+            $title.text(bulkLabels[mode] || '');
+            $status.text(bulkLabels.startingFor);
+            $counts.text('');
+            $errors.empty();
+            setBar(0);
+
+            $.post(pcAdminAjax.ajaxurl, {
+                action: 'pc_admin_bulk_init',
+                nonce:  pcAdminAjax.nonce,
+                mode:   mode
+            }).done(function(res) {
+                if (!res || !res.success) {
+                    $status.text((res && res.data && res.data.message) || bulkLabels.failed);
+                    $allBtns.prop('disabled', false);
+                    return;
+                }
+
+                var ids   = res.data.user_ids || [];
+                var total = res.data.total || 0;
+                if (total === 0) {
+                    $status.text(bulkLabels.noUsers);
+                    setBar(100);
+                    $allBtns.prop('disabled', false);
+                    return;
+                }
+
+                var i = 0;
+                var stats = { created: 0, emailed: 0, skipped: 0, errors: 0 };
+
+                function renderCounts() {
+                    var parts = [];
+                    if (mode === 'create_email') {
+                        parts.push('<?php echo esc_js(__('Created', 'personalized-cards')); ?>: ' + stats.created);
+                    }
+                    parts.push('<?php echo esc_js(__('Emailed', 'personalized-cards')); ?>: ' + stats.emailed);
+                    if (mode === 'create_email') {
+                        parts.push('<?php echo esc_js(__('Skipped (already had card)', 'personalized-cards')); ?>: ' + stats.skipped);
+                    }
+                    parts.push('<?php echo esc_js(__('Errors', 'personalized-cards')); ?>: ' + stats.errors);
+                    $counts.text(parts.join('  ·  '));
+                }
+
+                function step() {
+                    if (i >= total) {
+                        $status.text(bulkLabels.done + '  ' + bulkLabels.sent + ' ' + stats.emailed + ' / ' + total);
+                        setBar(100);
+                        renderCounts();
+                        $allBtns.prop('disabled', false);
+                        return;
+                    }
+                    var userId = ids[i];
+                    $status.text(bulkLabels.sending + '  ' + (i + 1) + ' / ' + total + '…');
+
+                    $.post(pcAdminAjax.ajaxurl, {
+                        action:  'pc_admin_bulk_step',
+                        nonce:   pcAdminAjax.nonce,
+                        mode:    mode,
+                        user_id: userId
+                    }).done(function(r) {
+                        if (r && r.success && r.data) {
+                            if (r.data.created) stats.created++;
+                            if (r.data.emailed) stats.emailed++;
+                            if (r.data.skipped) stats.skipped++;
+                            if (r.data.error)   {
+                                stats.errors++;
+                                $errors.append('<div>• ' + escapeHtml(r.data.name || ('user #' + userId)) + ': ' + escapeHtml(r.data.error) + '</div>');
+                            }
+                        } else {
+                            stats.errors++;
+                            var msg = (r && r.data && r.data.message) || bulkLabels.failed;
+                            $errors.append('<div>• user #' + userId + ': ' + escapeHtml(msg) + '</div>');
+                        }
+                    }).fail(function(xhr) {
+                        stats.errors++;
+                        $errors.append('<div>• user #' + userId + ': ' + bulkLabels.failed + ' (' + (xhr.status || '?') + ')</div>');
+                    }).always(function() {
+                        i++;
+                        setBar(Math.round((i / total) * 100));
+                        renderCounts();
+                        // Yield to the browser briefly so the UI repaints between requests.
+                        setTimeout(step, 50);
+                    });
+                }
+
+                renderCounts();
+                step();
+            }).fail(function(xhr) {
+                $status.text(bulkLabels.failed + ' (' + (xhr.status || '?') + ')');
+                $allBtns.prop('disabled', false);
+            });
+        }
+
+        $('#pc-bulk-create-email, #pc-bulk-email').on('click', function() {
+            var $btn = $(this);
+            if ($btn.prop('disabled')) return;
+            var msg = $btn.data('confirm');
+            if (msg && !window.confirm(msg)) return;
+            runBulk($btn.data('mode'));
         });
     });
     </script>
@@ -1386,141 +1511,231 @@ function pc_ajax_admin_send_card_email() {
     }
 }
 
-// ── Helper: bulk create + email ────────────────────────────────────────────────
-function pc_admin_bulk_create_and_email() {
+// ── Helper: get active member user IDs ────────────────────────────────────────
+function pc_admin_get_active_member_ids() {
     global $wpdb;
-    $table = $wpdb->prefix . 'personalized_cards';
-
-    $default_template = basename(get_option('pc_default_template', ''));
-    $template_path    = $default_template ? PC_PLUGIN_DIR . 'templates/cards/' . $default_template : '';
-    $upload_dir       = wp_upload_dir();
-    wp_mkdir_p($upload_dir['basedir'] . '/personalized-cards/');
-
-    $active_user_ids = $wpdb->get_col(
+    return array_map('intval', $wpdb->get_col(
         "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = 'pc_subscription_active' AND meta_value = '1'"
-    );
-
-    $created = 0;
-    $emailed = 0;
-    $skipped = 0;
-
-    foreach ($active_user_ids as $user_id) {
-        $user = get_userdata($user_id);
-        if (!$user) continue;
-
-        // Check if member already has a card
-        $existing = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table WHERE user_id = %d ORDER BY created_at DESC LIMIT 1",
-            $user_id
-        ));
-
-        if ($existing && $existing->card_image) {
-            // Already has a card — just email it
-            $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $existing->card_image);
-            if (file_exists($file_path)) {
-                $back_file = '';
-                if (!empty($existing->card_back_image)) {
-                    $b = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $existing->card_back_image);
-                    if (file_exists($b)) $back_file = $b;
-                }
-                $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
-                if ($sent) $emailed++;
-            }
-            $skipped++;
-            continue;
-        }
-
-        // No card yet — create one (requires a template)
-        if (!$template_path || !file_exists($template_path)) continue;
-
-        $expiry_date = get_user_meta($user_id, 'pc_subscription_expiry', true);
-        $card_data   = array(
-            'name'        => $user->display_name,
-            'father_name' => (string) get_user_meta($user_id, 'pc_father_name', true),
-            'sport'       => (string) get_user_meta($user_id, 'pc_sport', true),
-            'member_id'   => (string) (get_user_meta($user_id, 'pc_member_id', true) ?: $user_id),
-            'image'       => (string) get_user_meta($user_id, 'pc_member_image', true),
-            'message'     => '',
-            'date'        => $expiry_date ? date('Y-m-d', strtotime($expiry_date)) : '',
-        );
-
-        $card_id = PC_Database::save_card($user_id, $default_template, $card_data, 'standard');
-        if (!$card_id) continue;
-
-        $output_filename = 'card_' . $user_id . '_' . $card_id . '_' . time() . '.jpg';
-        $output_path     = $upload_dir['basedir'] . '/personalized-cards/' . $output_filename;
-
-        $result = PC_Card_Creator::create_personalized_card($template_path, $card_data, $output_path);
-        if (is_wp_error($result)) continue;
-
-        $image_url = $upload_dir['baseurl'] . '/personalized-cards/' . $output_filename;
-        PC_Database::update_card_image($card_id, $image_url);
-
-        if (get_option('pc_default_back_template', '')) {
-            $back_fn   = 'card_back_' . $user_id . '_' . $card_id . '_' . time() . '.jpg';
-            $back_path = $upload_dir['basedir'] . '/personalized-cards/' . $back_fn;
-            $back_res  = PC_Card_Creator::create_card_back($back_path);
-            if (!is_wp_error($back_res)) {
-                PC_Database::update_card_back_image($card_id, $upload_dir['baseurl'] . '/personalized-cards/' . $back_fn);
-            }
-        }
-
-        $created++;
-
-        $wallet_url = '';
-        if (get_option('pc_enable_google_wallet', '0') === '1') {
-            $w = PC_Wallet_Handler::create_google_wallet_link($card_data, $user_id, $image_url);
-            if (!is_wp_error($w)) $wallet_url = $w;
-        }
-        $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url);
-        if ($sent) $emailed++;
-    }
-
-    return compact('created', 'emailed', 'skipped');
+    ));
 }
 
-// ── Helper: bulk email active members ─────────────────────────────────────────
-function pc_admin_bulk_email_active_members() {
+// ── Per-user: create card if missing, then email ─────────────────────────────
+function pc_admin_process_create_and_email_for_user($user_id) {
     global $wpdb;
     $table = $wpdb->prefix . 'personalized_cards';
 
-    $active_user_ids = $wpdb->get_col(
-        "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = 'pc_subscription_active' AND meta_value = '1'"
-    );
-
-    if (empty($active_user_ids)) {
-        return 0;
+    $user = get_userdata($user_id);
+    if (!$user) {
+        return array('created' => false, 'emailed' => false, 'skipped' => false, 'error' => __('User not found.', 'personalized-cards'), 'name' => '');
     }
 
     $upload_dir = wp_upload_dir();
-    $count      = 0;
+    wp_mkdir_p($upload_dir['basedir'] . '/personalized-cards/');
 
-    foreach ($active_user_ids as $user_id) {
-        $user = get_userdata($user_id);
-        if (!$user) continue;
+    $existing = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table WHERE user_id = %d ORDER BY created_at DESC LIMIT 1",
+        $user_id
+    ));
 
-        // Get most recent card
-        $card = $wpdb->get_row($wpdb->prepare(
-            "SELECT * FROM $table WHERE user_id = %d ORDER BY created_at DESC LIMIT 1",
-            $user_id
-        ));
-
-        if (!$card || !$card->card_image) continue;
-
-        $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $card->card_image);
-        if (!file_exists($file_path)) continue;
-
-        $back_file = '';
-        if (!empty($card->card_back_image)) {
-            $b = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $card->card_back_image);
-            if (file_exists($b)) $back_file = $b;
+    if ($existing && $existing->card_image) {
+        $emailed   = false;
+        $error     = '';
+        $file_path = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $existing->card_image);
+        if (file_exists($file_path)) {
+            $back_file = '';
+            if (!empty($existing->card_back_image)) {
+                $b = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $existing->card_back_image);
+                if (file_exists($b)) $back_file = $b;
+            }
+            $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
+            if (!$emailed) $error = __('Email failed to send.', 'personalized-cards');
+        } else {
+            $error = __('Card image file missing on disk.', 'personalized-cards');
         }
-
-        $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
-        if ($sent) $count++;
+        return array('created' => false, 'emailed' => $emailed, 'skipped' => true, 'error' => $error, 'name' => $user->display_name);
     }
 
+    // Need to create a card
+    $default_template = basename(get_option('pc_default_template', ''));
+    $template_path    = $default_template ? PC_PLUGIN_DIR . 'templates/cards/' . $default_template : '';
+    if (!$template_path || !file_exists($template_path)) {
+        return array('created' => false, 'emailed' => false, 'skipped' => false, 'error' => __('Default template not configured.', 'personalized-cards'), 'name' => $user->display_name);
+    }
+
+    $expiry_date = get_user_meta($user_id, 'pc_subscription_expiry', true);
+    $card_data   = array(
+        'name'        => $user->display_name,
+        'father_name' => (string) get_user_meta($user_id, 'pc_father_name', true),
+        'sport'       => (string) get_user_meta($user_id, 'pc_sport', true),
+        'member_id'   => (string) (get_user_meta($user_id, 'pc_member_id', true) ?: $user_id),
+        'image'       => (string) get_user_meta($user_id, 'pc_member_image', true),
+        'message'     => '',
+        'date'        => $expiry_date ? date('Y-m-d', strtotime($expiry_date)) : '',
+    );
+
+    $card_id = PC_Database::save_card($user_id, $default_template, $card_data, 'standard');
+    if (!$card_id) {
+        return array('created' => false, 'emailed' => false, 'skipped' => false, 'error' => __('Failed to save card record.', 'personalized-cards'), 'name' => $user->display_name);
+    }
+
+    $output_filename = 'card_' . $user_id . '_' . $card_id . '_' . time() . '.jpg';
+    $output_path     = $upload_dir['basedir'] . '/personalized-cards/' . $output_filename;
+
+    $result = PC_Card_Creator::create_personalized_card($template_path, $card_data, $output_path);
+    if (is_wp_error($result)) {
+        return array('created' => false, 'emailed' => false, 'skipped' => false, 'error' => $result->get_error_message(), 'name' => $user->display_name);
+    }
+
+    $image_url = $upload_dir['baseurl'] . '/personalized-cards/' . $output_filename;
+    PC_Database::update_card_image($card_id, $image_url);
+
+    if (get_option('pc_default_back_template', '')) {
+        $back_fn   = 'card_back_' . $user_id . '_' . $card_id . '_' . time() . '.jpg';
+        $back_path = $upload_dir['basedir'] . '/personalized-cards/' . $back_fn;
+        $back_res  = PC_Card_Creator::create_card_back($back_path);
+        if (!is_wp_error($back_res)) {
+            PC_Database::update_card_back_image($card_id, $upload_dir['baseurl'] . '/personalized-cards/' . $back_fn);
+        }
+    }
+
+    $wallet_url = '';
+    if (get_option('pc_enable_google_wallet', '0') === '1') {
+        $w = PC_Wallet_Handler::create_google_wallet_link($card_data, $user_id, $image_url);
+        if (!is_wp_error($w)) $wallet_url = $w;
+    }
+
+    $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url);
+    return array(
+        'created' => true,
+        'emailed' => $emailed,
+        'skipped' => false,
+        'error'   => $emailed ? '' : __('Card created, but email failed to send.', 'personalized-cards'),
+        'name'    => $user->display_name,
+    );
+}
+
+// ── Per-user: email an already-existing card ─────────────────────────────────
+function pc_admin_process_email_for_user($user_id) {
+    global $wpdb;
+    $table = $wpdb->prefix . 'personalized_cards';
+
+    $user = get_userdata($user_id);
+    if (!$user) {
+        return array('emailed' => false, 'error' => __('User not found.', 'personalized-cards'), 'name' => '');
+    }
+
+    $card = $wpdb->get_row($wpdb->prepare(
+        "SELECT * FROM $table WHERE user_id = %d ORDER BY created_at DESC LIMIT 1",
+        $user_id
+    ));
+
+    if (!$card || !$card->card_image) {
+        return array('emailed' => false, 'error' => __('No card to email.', 'personalized-cards'), 'name' => $user->display_name);
+    }
+
+    $upload_dir = wp_upload_dir();
+    $file_path  = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $card->card_image);
+    if (!file_exists($file_path)) {
+        return array('emailed' => false, 'error' => __('Card image file missing on disk.', 'personalized-cards'), 'name' => $user->display_name);
+    }
+
+    $back_file = '';
+    if (!empty($card->card_back_image)) {
+        $b = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $card->card_back_image);
+        if (file_exists($b)) $back_file = $b;
+    }
+
+    $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
+    return array(
+        'emailed' => $emailed,
+        'error'   => $emailed ? '' : __('Email failed to send.', 'personalized-cards'),
+        'name'    => $user->display_name,
+    );
+}
+
+// ── Helper: bulk create + email (kept for non-AJAX callers) ───────────────────
+function pc_admin_bulk_create_and_email() {
+    $created = 0;
+    $emailed = 0;
+    $skipped = 0;
+    foreach (pc_admin_get_active_member_ids() as $user_id) {
+        $r = pc_admin_process_create_and_email_for_user($user_id);
+        if (!empty($r['created'])) $created++;
+        if (!empty($r['emailed'])) $emailed++;
+        if (!empty($r['skipped'])) $skipped++;
+    }
+    return compact('created', 'emailed', 'skipped');
+}
+
+// ── Helper: bulk email active members (kept for non-AJAX callers) ─────────────
+function pc_admin_bulk_email_active_members() {
+    $count = 0;
+    foreach (pc_admin_get_active_member_ids() as $user_id) {
+        $r = pc_admin_process_email_for_user($user_id);
+        if (!empty($r['emailed'])) $count++;
+    }
     return $count;
+}
+
+// ── AJAX: Bulk init — return list of user IDs to process ─────────────────────
+add_action('wp_ajax_pc_admin_bulk_init', 'pc_ajax_admin_bulk_init');
+function pc_ajax_admin_bulk_init() {
+    check_ajax_referer('pc_admin_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => __('Permission denied.', 'personalized-cards')));
+    }
+
+    $mode = isset($_POST['mode']) ? sanitize_text_field(wp_unslash($_POST['mode'])) : '';
+    if (!in_array($mode, array('create_email', 'email_only'), true)) {
+        wp_send_json_error(array('message' => __('Invalid mode.', 'personalized-cards')));
+    }
+
+    $user_ids = pc_admin_get_active_member_ids();
+
+    // For email_only, pre-filter to users that actually have a card on disk so
+    // the progress total reflects what will really be sent.
+    if ($mode === 'email_only' && !empty($user_ids)) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'personalized_cards';
+        $placeholders = implode(',', array_fill(0, count($user_ids), '%d'));
+        $with_card = $wpdb->get_col($wpdb->prepare(
+            "SELECT DISTINCT user_id FROM $table WHERE user_id IN ($placeholders) AND card_image <> ''",
+            $user_ids
+        ));
+        $with_card = array_map('intval', $with_card);
+        $user_ids  = array_values(array_intersect($user_ids, $with_card));
+    }
+
+    wp_send_json_success(array(
+        'user_ids' => $user_ids,
+        'total'    => count($user_ids),
+        'mode'     => $mode,
+    ));
+}
+
+// ── AJAX: Bulk step — process a single user, return per-user result ──────────
+add_action('wp_ajax_pc_admin_bulk_step', 'pc_ajax_admin_bulk_step');
+function pc_ajax_admin_bulk_step() {
+    check_ajax_referer('pc_admin_nonce', 'nonce');
+    if (!current_user_can('manage_options')) {
+        wp_send_json_error(array('message' => __('Permission denied.', 'personalized-cards')));
+    }
+
+    $mode    = isset($_POST['mode']) ? sanitize_text_field(wp_unslash($_POST['mode'])) : '';
+    $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+    if (!$user_id) {
+        wp_send_json_error(array('message' => __('Missing user_id.', 'personalized-cards')));
+    }
+
+    if ($mode === 'create_email') {
+        $r = pc_admin_process_create_and_email_for_user($user_id);
+    } elseif ($mode === 'email_only') {
+        $r = pc_admin_process_email_for_user($user_id);
+    } else {
+        wp_send_json_error(array('message' => __('Invalid mode.', 'personalized-cards')));
+    }
+
+    wp_send_json_success($r);
 }
 
 // ── AJAX: Delete card ──────────────────────────────────────────────────────────
