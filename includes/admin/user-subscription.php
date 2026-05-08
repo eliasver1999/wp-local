@@ -145,6 +145,13 @@ function pc_save_user_subscription_fields($user_id) {
                     if ($sent) {
                         update_user_meta($user_id, 'pc_welcome_sent_at', current_time('mysql'));
                         PC_Activity_Log::log('welcome_email_sent', 'Welcome email sent.', $user_id);
+                    } else {
+                        $err = PC_Email_Handler::get_last_error();
+                        PC_Activity_Log::log(
+                            'welcome_email_failed',
+                            'Welcome email failed: ' . ($err ?: 'unknown error'),
+                            $user_id
+                        );
                     }
                 }
             }

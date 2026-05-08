@@ -1616,7 +1616,12 @@ function pc_ajax_admin_send_card_email() {
         PC_Activity_Log::log('card_emailed', 'Card emailed to ' . $user->user_email, $user->ID);
         wp_send_json_success(array('message' => __('Email sent.', 'personalized-cards')));
     } else {
-        wp_send_json_error(array('message' => __('Email failed to send.', 'personalized-cards')));
+        $err = PC_Email_Handler::get_last_error();
+        wp_send_json_error(array(
+            'message' => $err
+                ? sprintf(__('Email failed: %s', 'personalized-cards'), $err)
+                : __('Email failed to send.', 'personalized-cards'),
+        ));
     }
 }
 
@@ -1657,7 +1662,12 @@ function pc_admin_process_create_and_email_for_user($user_id) {
                 if (file_exists($b)) $back_file = $b;
             }
             $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
-            if (!$emailed) $error = __('Email failed to send.', 'personalized-cards');
+            if (!$emailed) {
+                $smtp = PC_Email_Handler::get_last_error();
+                $error = $smtp
+                    ? sprintf(__('Email failed: %s', 'personalized-cards'), $smtp)
+                    : __('Email failed to send.', 'personalized-cards');
+            }
         } else {
             $error = __('Card image file missing on disk.', 'personalized-cards');
         }
@@ -1714,11 +1724,18 @@ function pc_admin_process_create_and_email_for_user($user_id) {
     }
 
     $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url);
+    $error = '';
+    if (!$emailed) {
+        $smtp = PC_Email_Handler::get_last_error();
+        $error = $smtp
+            ? sprintf(__('Card created, but email failed: %s', 'personalized-cards'), $smtp)
+            : __('Card created, but email failed to send.', 'personalized-cards');
+    }
     return array(
         'created' => true,
         'emailed' => $emailed,
         'skipped' => false,
-        'error'   => $emailed ? '' : __('Card created, but email failed to send.', 'personalized-cards'),
+        'error'   => $error,
         'name'    => $user->display_name,
     );
 }
@@ -1755,9 +1772,16 @@ function pc_admin_process_email_for_user($user_id) {
     }
 
     $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
+    $error = '';
+    if (!$emailed) {
+        $smtp = PC_Email_Handler::get_last_error();
+        $error = $smtp
+            ? sprintf(__('Email failed: %s', 'personalized-cards'), $smtp)
+            : __('Email failed to send.', 'personalized-cards');
+    }
     return array(
         'emailed' => $emailed,
-        'error'   => $emailed ? '' : __('Email failed to send.', 'personalized-cards'),
+        'error'   => $error,
         'name'    => $user->display_name,
     );
 }

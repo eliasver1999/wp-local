@@ -1,6 +1,31 @@
 <?php
 class PC_Email_Handler {
 
+    // ── Last-error capture via wp_mail_failed ────────────────────────────────
+    // wp_mail() only returns bool. To get the actual reason a send failed
+    // (bad From address, SMTP timeout, recipient bounce, etc.) we hook
+    // wp_mail_failed once and stash the WP_Error message.
+    private static $last_error = '';
+    private static $hook_registered = false;
+
+    public static function capture_mail_error($wp_error) {
+        if (is_wp_error($wp_error)) {
+            self::$last_error = $wp_error->get_error_message();
+        }
+    }
+
+    public static function get_last_error() {
+        return self::$last_error;
+    }
+
+    private static function reset_error_capture() {
+        self::$last_error = '';
+        if (!self::$hook_registered) {
+            self::$hook_registered = true;
+            add_action('wp_mail_failed', array(__CLASS__, 'capture_mail_error'));
+        }
+    }
+
     // ── Configurable email templates (welcome / reminder_10 / expiration) ──────
     // The "get_card" template lives in legacy options pc_email_subject / pc_email_message
     // and is handled by send_card_email() (with attachments) below.
@@ -80,6 +105,7 @@ class PC_Email_Handler {
 
         $html = self::wrap_html($message);
 
+        self::reset_error_capture();
         return (bool) wp_mail(
             $user->user_email,
             $subject,
@@ -186,6 +212,7 @@ class PC_Email_Handler {
         };
         add_action('phpmailer_init', $attach_cb);
 
+        self::reset_error_capture();
         $sent = wp_mail($user_email, $subject, $html_message, $headers);
 
         remove_action('phpmailer_init', $attach_cb);

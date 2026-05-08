@@ -27,6 +27,10 @@ class PC_Cron {
                AND meta_value != ''"
         );
 
+        // How long after an expiry date we keep retrying the expiration email if
+        // it hasn't gone through yet. Filterable so operators can extend it.
+        $expiration_retry_days = (int) apply_filters('pc_expiration_email_retry_days', 7);
+
         foreach ($rows as $row) {
             $user_id = (int) $row->user_id;
             $expiry  = $row->expiry;
@@ -37,31 +41,46 @@ class PC_Cron {
             $expiry_label = date_i18n('F j, Y', strtotime($expiry_date));
             $is_active    = get_user_meta($user_id, 'pc_subscription_active', true);
 
-            // ── Auto-expire: deactivate + send expiration email (once per expiry) ──
+            // ── Auto-expire (idempotent: only flips active=1 → active=0 once) ──
             if ($expiry_date < $today && $is_active === '1') {
                 update_user_meta($user_id, 'pc_subscription_active', '0');
                 PC_Activity_Log::log('membership_expired', 'Auto-expired. Expiry was ' . $expiry_date, $user_id);
+            }
 
+            // ── Expiration email — gated on sent_for (not is_active) so we
+            //    keep retrying for a few days if a previous send failed. ──
+            if ($expiry_date < $today) {
                 $sent_for = get_user_meta($user_id, 'pc_expiration_sent_for', true);
                 if ($sent_for !== $expiry_date) {
-                    $user = get_userdata($user_id);
-                    if ($user) {
-                        $sent = PC_Email_Handler::send_template_email($user, 'expiration', array(
-                            '{expiry_date}' => $expiry_label,
-                        ));
-                        if ($sent) {
-                            update_user_meta($user_id, 'pc_expiration_sent_for', $expiry_date);
-                            PC_Activity_Log::log('expiration_email_sent', 'Expiration email sent. Expiry: ' . $expiry_date, $user_id);
+                    $days_since = (int) floor((strtotime($today) - strtotime($expiry_date)) / DAY_IN_SECONDS);
+                    if ($days_since <= $expiration_retry_days) {
+                        $user = get_userdata($user_id);
+                        if ($user) {
+                            $sent = PC_Email_Handler::send_template_email($user, 'expiration', array(
+                                '{expiry_date}' => $expiry_label,
+                            ));
+                            if ($sent) {
+                                update_user_meta($user_id, 'pc_expiration_sent_for', $expiry_date);
+                                PC_Activity_Log::log('expiration_email_sent', 'Expiration email sent. Expiry: ' . $expiry_date, $user_id);
+                            } else {
+                                $err = PC_Email_Handler::get_last_error();
+                                PC_Activity_Log::log(
+                                    'expiration_email_failed',
+                                    sprintf('Expiration email failed (day %d/%d): %s. Expiry: %s',
+                                        $days_since, $expiration_retry_days, ($err ?: 'unknown error'), $expiry_date),
+                                    $user_id
+                                );
+                            }
                         }
                     }
                 }
-                continue;
+                continue; // already-expired members skip the reminder logic
             }
 
-            // ── 10-day reminder: only if active and not already sent for this expiry ──
+            // ── 10-day reminder: only on the trigger day, once per expiry ──
             if ($expiry_date === $reminder_day && $is_active === '1') {
                 $sent_for = get_user_meta($user_id, 'pc_reminder_10_sent_for', true);
-                if ($sent_for === $expiry_date) continue; // already sent for this expiry
+                if ($sent_for === $expiry_date) continue;
 
                 $user = get_userdata($user_id);
                 if (!$user) continue;
@@ -76,6 +95,13 @@ class PC_Cron {
                     // Keep the legacy "last sent today" key for any external code that checks it.
                     update_user_meta($user_id, 'pc_reminder_sent', $today);
                     PC_Activity_Log::log('renewal_reminder_sent', '10-day renewal reminder sent. Expiry: ' . $expiry_date, $user_id);
+                } else {
+                    $err = PC_Email_Handler::get_last_error();
+                    PC_Activity_Log::log(
+                        'renewal_reminder_failed',
+                        sprintf('10-day reminder failed: %s. Expiry: %s', ($err ?: 'unknown error'), $expiry_date),
+                        $user_id
+                    );
                 }
             }
         }
