@@ -171,3 +171,174 @@ function pc_my_card_shortcode() {
 // Legacy shortcodes kept for backward compatibility but hidden from users
 add_shortcode('my_personalized_cards', 'pc_my_card_shortcode');
 add_shortcode('pc_dashboard', 'pc_my_card_shortcode');
+
+// ── [pc_member_photo_upload] — frontend self-service photo upload ────────────
+add_shortcode('pc_member_photo_upload', 'pc_member_photo_upload_shortcode');
+function pc_member_photo_upload_shortcode($atts = array()) {
+    if (!is_user_logged_in()) {
+        return '<p class="pc-photo-upload-login">'
+             . esc_html__('Please log in to upload your photo.', 'personalized-cards')
+             . '</p>';
+    }
+
+    $user_id   = get_current_user_id();
+    $current   = (string) get_user_meta($user_id, 'pc_member_image', true);
+    $max_bytes = (int) apply_filters('pc_member_photo_max_bytes', 5 * 1024 * 1024); // 5 MB
+    $max_mb    = round($max_bytes / 1024 / 1024, 1);
+
+    ob_start();
+    ?>
+    <div class="pc-photo-upload-wrap" data-max-bytes="<?php echo esc_attr($max_bytes); ?>">
+        <h3 class="pc-photo-upload-title"><?php esc_html_e('Your Photo', 'personalized-cards'); ?></h3>
+
+        <div class="pc-photo-upload-preview-wrap">
+            <img class="pc-photo-upload-preview"
+                 src="<?php echo esc_url($current); ?>"
+                 alt="<?php esc_attr_e('Current member photo', 'personalized-cards'); ?>"
+                 style="max-width:180px;height:auto;border:1px solid #ddd;<?php echo $current ? '' : 'display:none;'; ?>">
+            <p class="pc-photo-upload-empty" <?php echo $current ? 'style="display:none;"' : ''; ?>>
+                <?php esc_html_e('No photo on file yet.', 'personalized-cards'); ?>
+            </p>
+        </div>
+
+        <form class="pc-photo-upload-form" enctype="multipart/form-data" style="margin-top:12px;">
+            <input type="file" name="photo" accept="image/jpeg,image/png,image/gif" required>
+            <button type="submit" class="pc-btn pc-btn-upload"><?php esc_html_e('Upload', 'personalized-cards'); ?></button>
+            <span class="pc-photo-upload-status" aria-live="polite" style="margin-left:8px;"></span>
+        </form>
+
+        <p class="pc-photo-upload-help" style="font-size:13px;color:#666;margin-top:8px;">
+            <?php echo esc_html(sprintf(
+                __('JPG, PNG or GIF. Max %s MB. Photo applies to your next card.', 'personalized-cards'),
+                $max_mb
+            )); ?>
+        </p>
+    </div>
+    <script>
+    (function($){
+        if (typeof pcAjax === 'undefined') return;
+        $(function(){
+            $('.pc-photo-upload-wrap').each(function(){
+                var $wrap    = $(this);
+                var maxBytes = parseInt($wrap.data('max-bytes'), 10) || 0;
+                var $form    = $wrap.find('.pc-photo-upload-form');
+                var $status  = $wrap.find('.pc-photo-upload-status');
+                var $preview = $wrap.find('.pc-photo-upload-preview');
+                var $empty   = $wrap.find('.pc-photo-upload-empty');
+
+                $form.on('submit', function(e){
+                    e.preventDefault();
+                    var input = $form.find('input[type=file]')[0];
+                    if (!input || !input.files || !input.files.length) return;
+                    var file = input.files[0];
+
+                    if (maxBytes && file.size > maxBytes) {
+                        $status.css('color', '#a00').text('<?php echo esc_js(__('File is too large.', 'personalized-cards')); ?>');
+                        return;
+                    }
+
+                    var fd = new FormData();
+                    fd.append('action', 'pc_upload_member_photo');
+                    fd.append('nonce',  pcAjax.nonce);
+                    fd.append('photo',  file);
+
+                    var $btn = $form.find('button');
+                    $btn.prop('disabled', true);
+                    $status.css('color', '#555').text('<?php echo esc_js(__('Uploading…', 'personalized-cards')); ?>');
+
+                    $.ajax({
+                        url:         pcAjax.ajaxurl,
+                        method:      'POST',
+                        data:        fd,
+                        processData: false,
+                        contentType: false
+                    }).done(function(res){
+                        if (res && res.success && res.data && res.data.url) {
+                            $preview.attr('src', res.data.url + '?t=' + Date.now()).show();
+                            $empty.hide();
+                            $status.css('color', 'green').text(res.data.message || '<?php echo esc_js(__('Photo updated.', 'personalized-cards')); ?>');
+                            $form[0].reset();
+                        } else {
+                            var msg = (res && res.data && res.data.message) || '<?php echo esc_js(__('Upload failed.', 'personalized-cards')); ?>';
+                            $status.css('color', '#a00').text(msg);
+                        }
+                    }).fail(function(xhr){
+                        $status.css('color', '#a00').text('<?php echo esc_js(__('Upload failed', 'personalized-cards')); ?>' + ' (' + (xhr.status||'?') + ')');
+                    }).always(function(){
+                        $btn.prop('disabled', false);
+                    });
+                });
+            });
+        });
+    })(jQuery);
+    </script>
+    <?php
+    return ob_get_clean();
+}
+
+// ── AJAX: handle frontend member-photo upload ────────────────────────────────
+add_action('wp_ajax_pc_upload_member_photo', 'pc_ajax_upload_member_photo');
+function pc_ajax_upload_member_photo() {
+    if (!is_user_logged_in()) {
+        wp_send_json_error(array('message' => __('You must be logged in to upload a photo.', 'personalized-cards')));
+    }
+    check_ajax_referer('pc_nonce', 'nonce');
+
+    if (empty($_FILES['photo']) || !is_array($_FILES['photo'])) {
+        wp_send_json_error(array('message' => __('No file provided.', 'personalized-cards')));
+    }
+    $file = $_FILES['photo'];
+    if (!isset($file['error']) || $file['error'] !== UPLOAD_ERR_OK) {
+        wp_send_json_error(array('message' => __('Upload failed: server reported an error.', 'personalized-cards')));
+    }
+
+    // Size cap (defaults to 5 MB; filterable).
+    $max_bytes = (int) apply_filters('pc_member_photo_max_bytes', 5 * 1024 * 1024);
+    if ((int) $file['size'] > $max_bytes) {
+        wp_send_json_error(array(
+            'message' => sprintf(
+                __('File is too large. Max %s MB.', 'personalized-cards'),
+                round($max_bytes / 1024 / 1024, 1)
+            ),
+        ));
+    }
+
+    // MIME whitelist — verify magic bytes via WP helper, not just filename.
+    $check = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
+    if (empty($check['type']) || strpos($check['type'], 'image/') !== 0) {
+        wp_send_json_error(array('message' => __('Only image files (JPG, PNG, GIF) are allowed.', 'personalized-cards')));
+    }
+    $allowed_mimes = array('image/jpeg', 'image/png', 'image/gif');
+    if (!in_array($check['type'], $allowed_mimes, true)) {
+        wp_send_json_error(array('message' => __('Only JPG, PNG, and GIF images are allowed.', 'personalized-cards')));
+    }
+
+    if (!function_exists('wp_handle_upload')) {
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+    }
+
+    $overrides = array(
+        'test_form' => false,
+        'mimes'     => array(
+            'jpg|jpeg|jpe' => 'image/jpeg',
+            'gif'          => 'image/gif',
+            'png'          => 'image/png',
+        ),
+    );
+    $upload = wp_handle_upload($file, $overrides);
+    if (isset($upload['error'])) {
+        wp_send_json_error(array('message' => $upload['error']));
+    }
+
+    $user_id = get_current_user_id();
+    update_user_meta($user_id, 'pc_member_image', esc_url_raw($upload['url']));
+
+    if (class_exists('PC_Activity_Log')) {
+        PC_Activity_Log::log('member_photo_uploaded', 'Member uploaded a new photo via frontend.', $user_id);
+    }
+
+    wp_send_json_success(array(
+        'url'     => $upload['url'],
+        'message' => __('Photo updated. Your next card will use this image.', 'personalized-cards'),
+    ));
+}

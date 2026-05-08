@@ -568,6 +568,7 @@ function pc_export_settings() {
         'pc_field_expiry_format', 'pc_qr_content_template',
         'pc_field_qr_enabled', 'pc_field_qr_x', 'pc_field_qr_y', 'pc_field_qr_size',
         'pc_field_image_enabled', 'pc_field_image_x', 'pc_field_image_y', 'pc_field_image_w', 'pc_field_image_h',
+        'pc_field_image_fit', 'pc_field_image_circular', 'pc_field_image_default',
     );
     foreach (array('name', 'expiry', 'father_name', 'sport', 'member_id') as $f) {
         foreach (array('enabled', 'x', 'y', 'size', 'color') as $prop) {
@@ -628,6 +629,9 @@ function pc_settings_page() {
     $templates_dir = PC_PLUGIN_DIR . 'templates/cards/';
     $fonts_dir     = PC_PLUGIN_DIR . 'assets/fonts/';
     $notices = array();
+
+    // Needed for the default-avatar media picker.
+    wp_enqueue_media();
 
     // Import/export notices
     $msg_map = array(
@@ -798,6 +802,12 @@ function pc_settings_page() {
         update_option('pc_field_image_y',       absint($_POST['pc_field_image_y'] ?? 0));
         update_option('pc_field_image_w',       absint($_POST['pc_field_image_w'] ?? 150));
         update_option('pc_field_image_h',       absint($_POST['pc_field_image_h'] ?? 150));
+        // Photo rendering options
+        $fit_choice = isset($_POST['pc_field_image_fit']) ? sanitize_text_field($_POST['pc_field_image_fit']) : 'cover';
+        if (!in_array($fit_choice, array('cover', 'contain', 'stretch'), true)) $fit_choice = 'cover';
+        update_option('pc_field_image_fit',      $fit_choice);
+        update_option('pc_field_image_circular', isset($_POST['pc_field_image_circular']) ? '1' : '0');
+        update_option('pc_field_image_default',  esc_url_raw($_POST['pc_field_image_default'] ?? ''));
         update_option('pc_field_expiry_format', sanitize_text_field($_POST['pc_field_expiry_format'] ?? 'd/m/Y'));
 
         // QR code settings
@@ -1103,6 +1113,71 @@ function pc_settings_page() {
                                     </label>
                                 </td>
                             </tr>
+                            <?php
+                            $img_fit       = get_option('pc_field_image_fit', 'cover');
+                            $img_circular  = get_option('pc_field_image_circular', '0');
+                            $img_default   = get_option('pc_field_image_default', '');
+                            ?>
+                            <tr data-pc-field="image-options">
+                                <th><?php _e('Photo Rendering', 'personalized-cards'); ?></th>
+                                <td>
+                                    <label style="margin-right:18px;">
+                                        <?php _e('Fit', 'personalized-cards'); ?>
+                                        <select name="pc_field_image_fit">
+                                            <option value="cover"   <?php selected($img_fit, 'cover'); ?>><?php _e('Cover (crop to fill, no distortion)', 'personalized-cards'); ?></option>
+                                            <option value="contain" <?php selected($img_fit, 'contain'); ?>><?php _e('Contain (fit whole photo, transparent margins)', 'personalized-cards'); ?></option>
+                                            <option value="stretch" <?php selected($img_fit, 'stretch'); ?>><?php _e('Stretch (fill, may distort)', 'personalized-cards'); ?></option>
+                                        </select>
+                                    </label>
+                                    <label style="margin-right:18px;">
+                                        <input type="checkbox" name="pc_field_image_circular" value="1" <?php checked($img_circular, '1'); ?>>
+                                        <?php _e('Circular crop', 'personalized-cards'); ?>
+                                    </label>
+                                    <p class="description" style="margin-top:8px;">
+                                        <?php _e('Cover is recommended for portrait photos. Stretch matches the legacy behavior.', 'personalized-cards'); ?>
+                                    </p>
+                                </td>
+                            </tr>
+                            <tr data-pc-field="image-default">
+                                <th><label for="pc_field_image_default"><?php _e('Default Avatar (fallback)', 'personalized-cards'); ?></label></th>
+                                <td>
+                                    <input type="text" name="pc_field_image_default" id="pc_field_image_default" value="<?php echo esc_attr($img_default); ?>" class="regular-text" placeholder="https://...">
+                                    <button type="button" class="button" id="pc_default_avatar_pick"><?php _e('Choose Image', 'personalized-cards'); ?></button>
+                                    <button type="button" class="button" id="pc_default_avatar_clear"><?php _e('Remove', 'personalized-cards'); ?></button>
+                                    <div style="margin-top:8px;">
+                                        <img id="pc_default_avatar_preview" src="<?php echo esc_url($img_default); ?>"
+                                             style="max-width:120px;height:auto;border:1px solid #ddd;<?php echo $img_default ? '' : 'display:none;'; ?>">
+                                    </div>
+                                    <p class="description"><?php _e('Used when a member has no photo or their photo cannot be loaded.', 'personalized-cards'); ?></p>
+                                </td>
+                            </tr>
+                            <script>
+                            jQuery(function($) {
+                                if (typeof wp === 'undefined' || !wp.media) return;
+                                var frame;
+                                $('#pc_default_avatar_pick').on('click', function(e) {
+                                    e.preventDefault();
+                                    if (frame) { frame.open(); return; }
+                                    frame = wp.media({
+                                        title: '<?php echo esc_js(__('Select Default Avatar', 'personalized-cards')); ?>',
+                                        button: { text: '<?php echo esc_js(__('Use this image', 'personalized-cards')); ?>' },
+                                        library: { type: 'image' },
+                                        multiple: false
+                                    });
+                                    frame.on('select', function() {
+                                        var a = frame.state().get('selection').first().toJSON();
+                                        $('#pc_field_image_default').val(a.url);
+                                        $('#pc_default_avatar_preview').attr('src', a.url).show();
+                                    });
+                                    frame.open();
+                                });
+                                $('#pc_default_avatar_clear').on('click', function(e) {
+                                    e.preventDefault();
+                                    $('#pc_field_image_default').val('');
+                                    $('#pc_default_avatar_preview').hide().attr('src', '');
+                                });
+                            });
+                            </script>
                             <tr data-pc-field="qr">
                                 <th style="padding-top:16px;">
                                     <label>
