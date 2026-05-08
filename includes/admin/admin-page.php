@@ -561,6 +561,9 @@ function pc_export_settings() {
     $keys = array(
         'pc_default_template', 'pc_default_back_template', 'pc_font_file',
         'pc_email_from_name', 'pc_email_from_address', 'pc_email_subject', 'pc_email_message',
+        'pc_email_welcome_subject', 'pc_email_welcome_message',
+        'pc_email_reminder_10_subject', 'pc_email_reminder_10_message',
+        'pc_email_expiration_subject', 'pc_email_expiration_message',
         'pc_enable_apple_wallet', 'pc_enable_google_wallet', 'pc_google_wallet_issuer_id',
         'pc_field_expiry_format', 'pc_qr_content_template',
         'pc_field_qr_enabled', 'pc_field_qr_x', 'pc_field_qr_y', 'pc_field_qr_size',
@@ -764,8 +767,18 @@ function pc_settings_page() {
         update_option('pc_default_back_template', sanitize_text_field($_POST['pc_default_back_template']));
         update_option('pc_email_from_name',         sanitize_text_field($_POST['pc_email_from_name']));
         update_option('pc_email_from_address',      sanitize_email($_POST['pc_email_from_address']));
+        // Get Card email (legacy keys)
         update_option('pc_email_subject',           sanitize_text_field($_POST['pc_email_subject']));
         update_option('pc_email_message',           wp_kses_post($_POST['pc_email_message']));
+        // Welcome / 10-day reminder / Expiration templates
+        foreach (array('welcome', 'reminder_10', 'expiration') as $tpl) {
+            if (isset($_POST["pc_email_{$tpl}_subject"])) {
+                update_option("pc_email_{$tpl}_subject", sanitize_text_field(wp_unslash($_POST["pc_email_{$tpl}_subject"])));
+            }
+            if (isset($_POST["pc_email_{$tpl}_message"])) {
+                update_option("pc_email_{$tpl}_message", wp_kses_post(wp_unslash($_POST["pc_email_{$tpl}_message"])));
+            }
+        }
         update_option('pc_enable_apple_wallet',     isset($_POST['pc_enable_apple_wallet']) ? '1' : '0');
         update_option('pc_enable_google_wallet',    isset($_POST['pc_enable_google_wallet']) ? '1' : '0');
         update_option('pc_google_wallet_issuer_id', sanitize_text_field($_POST['pc_google_wallet_issuer_id']));
@@ -1144,18 +1157,114 @@ function pc_settings_page() {
                     <th><label for="pc_email_from_address"><?php _e('From Email', 'personalized-cards'); ?></label></th>
                     <td><input type="email" name="pc_email_from_address" id="pc_email_from_address" value="<?php echo esc_attr($email_from_address); ?>" class="regular-text"></td>
                 </tr>
-                <tr>
-                    <th><label for="pc_email_subject"><?php _e('Subject', 'personalized-cards'); ?></label></th>
-                    <td><input type="text" name="pc_email_subject" id="pc_email_subject" value="<?php echo esc_attr($email_subject); ?>" class="regular-text"></td>
-                </tr>
-                <tr>
-                    <th><label for="pc_email_message"><?php _e('Message', 'personalized-cards'); ?></label></th>
-                    <td>
-                        <textarea name="pc_email_message" id="pc_email_message" rows="4" class="large-text"><?php echo esc_textarea($email_message); ?></textarea>
-                        <p class="description"><?php _e('Use {name} for member name, {site_name} for site name.', 'personalized-cards'); ?></p>
-                    </td>
-                </tr>
             </table>
+
+            <?php
+            // ── Email templates editor ───────────────────────────────────────
+            $email_tabs = array(
+                'get_card' => array(
+                    'label'        => __('Get Card Email', 'personalized-cards'),
+                    'description'  => __('Sent when a member receives their personalized card (front & back attached).', 'personalized-cards'),
+                    'subject_key'  => 'pc_email_subject',
+                    'message_key'  => 'pc_email_message',
+                    'subject_val'  => $email_subject,
+                    'message_val'  => $email_message,
+                    'tokens'       => '{name}, {site_name}',
+                ),
+                'welcome' => array(
+                    'label'        => __('Welcome Email', 'personalized-cards'),
+                    'description'  => __('Sent the first time a member is activated.', 'personalized-cards'),
+                    'subject_key'  => 'pc_email_welcome_subject',
+                    'message_key'  => 'pc_email_welcome_message',
+                    'subject_val'  => PC_Email_Handler::get_template_subject('welcome'),
+                    'message_val'  => PC_Email_Handler::get_template_message('welcome'),
+                    'tokens'       => '{name}, {site_name}, {expiry_date}, {login_url}, {my_card_url}',
+                ),
+                'reminder_10' => array(
+                    'label'        => __('10-Day Expiration Reminder', 'personalized-cards'),
+                    'description'  => __('Sent automatically once, 10 days before a member\'s expiry date.', 'personalized-cards'),
+                    'subject_key'  => 'pc_email_reminder_10_subject',
+                    'message_key'  => 'pc_email_reminder_10_message',
+                    'subject_val'  => PC_Email_Handler::get_template_subject('reminder_10'),
+                    'message_val'  => PC_Email_Handler::get_template_message('reminder_10'),
+                    'tokens'       => '{name}, {site_name}, {expiry_date}, {days_left}, {login_url}',
+                ),
+                'expiration' => array(
+                    'label'        => __('Expiration Email', 'personalized-cards'),
+                    'description'  => __('Sent automatically when a member\'s subscription expires.', 'personalized-cards'),
+                    'subject_key'  => 'pc_email_expiration_subject',
+                    'message_key'  => 'pc_email_expiration_message',
+                    'subject_val'  => PC_Email_Handler::get_template_subject('expiration'),
+                    'message_val'  => PC_Email_Handler::get_template_message('expiration'),
+                    'tokens'       => '{name}, {site_name}, {expiry_date}, {login_url}',
+                ),
+            );
+            ?>
+            <h3 style="margin-top:24px;"><?php _e('Email Templates', 'personalized-cards'); ?></h3>
+            <p class="description" style="margin-bottom:12px;">
+                <?php _e('Customize the subject and body for each automatic email. Placeholders are listed under each section and are replaced when the email is sent.', 'personalized-cards'); ?>
+            </p>
+
+            <div class="pc-email-tabs">
+                <ul class="pc-email-tabs-nav" style="display:flex;gap:4px;list-style:none;margin:0 0 -1px;padding:0;border-bottom:1px solid #c3c4c7;">
+                    <?php $i = 0; foreach ($email_tabs as $tab_id => $tab): ?>
+                        <li>
+                            <a href="#pc-email-tab-<?php echo esc_attr($tab_id); ?>"
+                               class="pc-email-tab-link<?php echo $i === 0 ? ' active' : ''; ?>"
+                               data-tab="pc-email-tab-<?php echo esc_attr($tab_id); ?>"
+                               style="display:inline-block;padding:8px 14px;border:1px solid #c3c4c7;border-bottom:none;background:<?php echo $i === 0 ? '#fff' : '#f0f0f1'; ?>;text-decoration:none;color:#1d2327;border-radius:4px 4px 0 0;">
+                                <?php echo esc_html($tab['label']); ?>
+                            </a>
+                        </li>
+                    <?php $i++; endforeach; ?>
+                </ul>
+                <?php $i = 0; foreach ($email_tabs as $tab_id => $tab): ?>
+                    <div id="pc-email-tab-<?php echo esc_attr($tab_id); ?>"
+                         class="pc-email-tab-panel"
+                         style="<?php echo $i === 0 ? '' : 'display:none;'; ?>border:1px solid #c3c4c7;border-top:none;background:#fff;padding:16px;">
+                        <p style="margin-top:0;color:#555;"><?php echo esc_html($tab['description']); ?></p>
+                        <table class="form-table" style="margin-top:0;">
+                            <tr>
+                                <th><label for="<?php echo esc_attr($tab['subject_key']); ?>"><?php _e('Subject', 'personalized-cards'); ?></label></th>
+                                <td>
+                                    <input type="text"
+                                           name="<?php echo esc_attr($tab['subject_key']); ?>"
+                                           id="<?php echo esc_attr($tab['subject_key']); ?>"
+                                           value="<?php echo esc_attr($tab['subject_val']); ?>"
+                                           class="large-text">
+                                </td>
+                            </tr>
+                            <tr>
+                                <th><label for="<?php echo esc_attr($tab['message_key']); ?>"><?php _e('Message', 'personalized-cards'); ?></label></th>
+                                <td>
+                                    <textarea name="<?php echo esc_attr($tab['message_key']); ?>"
+                                              id="<?php echo esc_attr($tab['message_key']); ?>"
+                                              rows="8"
+                                              class="large-text code"><?php echo esc_textarea($tab['message_val']); ?></textarea>
+                                    <p class="description">
+                                        <?php _e('Available placeholders:', 'personalized-cards'); ?>
+                                        <code><?php echo esc_html($tab['tokens']); ?></code>
+                                    </p>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                <?php $i++; endforeach; ?>
+            </div>
+
+            <script>
+            jQuery(function($) {
+                $('.pc-email-tab-link').on('click', function(e) {
+                    e.preventDefault();
+                    var $link = $(this);
+                    var target = $link.data('tab');
+                    $('.pc-email-tab-link').removeClass('active').css('background', '#f0f0f1');
+                    $link.addClass('active').css('background', '#fff');
+                    $('.pc-email-tab-panel').hide();
+                    $('#' + target).show();
+                });
+            });
+            </script>
 
             <h2><?php _e('Digital Wallet', 'personalized-cards'); ?></h2>
             <table class="form-table">

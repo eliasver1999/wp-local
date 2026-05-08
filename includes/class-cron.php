@@ -17,78 +17,67 @@ class PC_Cron {
     public static function run_daily() {
         global $wpdb;
 
-        $today        = current_time('Y-m-d');
-        $reminder_day = date('Y-m-d', strtotime($today . ' +30 days'));
+        $today          = current_time('Y-m-d');
+        $reminder_day   = date('Y-m-d', strtotime($today . ' +10 days'));
 
-        $active_users = $wpdb->get_results(
+        $rows = $wpdb->get_results(
             "SELECT user_id, meta_value AS expiry
              FROM {$wpdb->usermeta}
              WHERE meta_key = 'pc_subscription_expiry'
                AND meta_value != ''"
         );
 
-        foreach ($active_users as $row) {
+        foreach ($rows as $row) {
             $user_id = (int) $row->user_id;
             $expiry  = $row->expiry;
 
             if (!$expiry || !strtotime($expiry)) continue;
 
-            $expiry_date = date('Y-m-d', strtotime($expiry));
-            $is_active   = get_user_meta($user_id, 'pc_subscription_active', true);
+            $expiry_date  = date('Y-m-d', strtotime($expiry));
+            $expiry_label = date_i18n('F j, Y', strtotime($expiry_date));
+            $is_active    = get_user_meta($user_id, 'pc_subscription_active', true);
 
-            // Auto-expire
+            // ── Auto-expire: deactivate + send expiration email (once per expiry) ──
             if ($expiry_date < $today && $is_active === '1') {
                 update_user_meta($user_id, 'pc_subscription_active', '0');
                 PC_Activity_Log::log('membership_expired', 'Auto-expired. Expiry was ' . $expiry_date, $user_id);
+
+                $sent_for = get_user_meta($user_id, 'pc_expiration_sent_for', true);
+                if ($sent_for !== $expiry_date) {
+                    $user = get_userdata($user_id);
+                    if ($user) {
+                        $sent = PC_Email_Handler::send_template_email($user, 'expiration', array(
+                            '{expiry_date}' => $expiry_label,
+                        ));
+                        if ($sent) {
+                            update_user_meta($user_id, 'pc_expiration_sent_for', $expiry_date);
+                            PC_Activity_Log::log('expiration_email_sent', 'Expiration email sent. Expiry: ' . $expiry_date, $user_id);
+                        }
+                    }
+                }
                 continue;
             }
 
-            // 30-day reminder — only if active and not already sent today
+            // ── 10-day reminder: only if active and not already sent for this expiry ──
             if ($expiry_date === $reminder_day && $is_active === '1') {
-                $last_reminder = get_user_meta($user_id, 'pc_reminder_sent', true);
-                if ($last_reminder === $today) continue; // already sent today
+                $sent_for = get_user_meta($user_id, 'pc_reminder_10_sent_for', true);
+                if ($sent_for === $expiry_date) continue; // already sent for this expiry
 
                 $user = get_userdata($user_id);
                 if (!$user) continue;
 
-                self::send_renewal_reminder($user, $expiry_date);
-                update_user_meta($user_id, 'pc_reminder_sent', $today);
-                PC_Activity_Log::log('renewal_reminder_sent', '30-day renewal reminder sent. Expiry: ' . $expiry_date, $user_id);
+                $days_left = max(0, (int) round((strtotime($expiry_date) - strtotime($today)) / DAY_IN_SECONDS));
+                $sent = PC_Email_Handler::send_template_email($user, 'reminder_10', array(
+                    '{expiry_date}' => $expiry_label,
+                    '{days_left}'   => (string) $days_left,
+                ));
+                if ($sent) {
+                    update_user_meta($user_id, 'pc_reminder_10_sent_for', $expiry_date);
+                    // Keep the legacy "last sent today" key for any external code that checks it.
+                    update_user_meta($user_id, 'pc_reminder_sent', $today);
+                    PC_Activity_Log::log('renewal_reminder_sent', '10-day renewal reminder sent. Expiry: ' . $expiry_date, $user_id);
+                }
             }
         }
-    }
-
-    private static function send_renewal_reminder($user, $expiry_date) {
-        $from_name    = get_option('pc_email_from_name', get_bloginfo('name'));
-        $from_email   = get_option('pc_email_from_address', get_bloginfo('admin_email'));
-        $site_name    = get_bloginfo('name');
-        $expiry_label = date_i18n('F j, Y', strtotime($expiry_date));
-
-        $subject = sprintf(__('[%s] Your membership expires in 30 days', 'personalized-cards'), $site_name);
-
-        $body = '<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family:Arial,sans-serif;color:#333;">
-        <div style="max-width:600px;margin:0 auto;padding:20px;">
-            <div style="background:#0073aa;color:#fff;padding:20px;text-align:center;">
-                <h1>' . esc_html($site_name) . '</h1>
-            </div>
-            <div style="padding:30px;background:#f9f9f9;">
-                <p>' . sprintf(esc_html__('Dear %s,', 'personalized-cards'), esc_html($user->display_name)) . '</p>
-                <p>' . sprintf(esc_html__('This is a friendly reminder that your membership at %1$s will expire on %2$s (in 30 days).', 'personalized-cards'), esc_html($site_name), '<strong>' . esc_html($expiry_label) . '</strong>') . '</p>
-                <p>' . esc_html__('Please contact an administrator to renew your membership and keep access to your card.', 'personalized-cards') . '</p>
-            </div>
-            <div style="text-align:center;padding:20px;font-size:12px;color:#666;">
-                &copy; ' . date('Y') . ' ' . esc_html($site_name) . '
-            </div>
-        </div></body></html>';
-
-        wp_mail(
-            $user->user_email,
-            $subject,
-            $body,
-            array(
-                'Content-Type: text/html; charset=UTF-8',
-                'From: ' . $from_name . ' <' . $from_email . '>',
-            )
-        );
     }
 }

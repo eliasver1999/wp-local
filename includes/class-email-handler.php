@@ -1,6 +1,112 @@
 <?php
 class PC_Email_Handler {
-    
+
+    // ── Configurable email templates (welcome / reminder_10 / expiration) ──────
+    // The "get_card" template lives in legacy options pc_email_subject / pc_email_message
+    // and is handled by send_card_email() (with attachments) below.
+    public static function get_default_templates() {
+        return array(
+            'welcome' => array(
+                'subject' => __('Welcome to {site_name}!', 'personalized-cards'),
+                'message' => __(
+                    "<p>Hi {name},</p>\n<p>Welcome to {site_name}! Your membership is now active.</p>\n<p>Your membership is valid until <strong>{expiry_date}</strong>.</p>\n<p>You can sign in any time at <a href=\"{login_url}\">{login_url}</a> to view and download your card.</p>\n<p>— The {site_name} team</p>",
+                    'personalized-cards'
+                ),
+            ),
+            'reminder_10' => array(
+                'subject' => __('[{site_name}] Your membership expires in {days_left} days', 'personalized-cards'),
+                'message' => __(
+                    "<p>Hi {name},</p>\n<p>This is a friendly reminder that your membership at {site_name} will expire on <strong>{expiry_date}</strong> ({days_left} days from today).</p>\n<p>To keep your card active, please contact an administrator to renew.</p>\n<p>— The {site_name} team</p>",
+                    'personalized-cards'
+                ),
+            ),
+            'expiration' => array(
+                'subject' => __('[{site_name}] Your membership has expired', 'personalized-cards'),
+                'message' => __(
+                    "<p>Hi {name},</p>\n<p>Your membership at {site_name} expired on <strong>{expiry_date}</strong>.</p>\n<p>To renew and keep access to your card, please contact an administrator.</p>\n<p>— The {site_name} team</p>",
+                    'personalized-cards'
+                ),
+            ),
+        );
+    }
+
+    public static function get_template_keys() {
+        return array_keys(self::get_default_templates());
+    }
+
+    public static function get_template_subject($key) {
+        $defaults = self::get_default_templates();
+        if (!isset($defaults[$key])) return '';
+        return get_option("pc_email_{$key}_subject", $defaults[$key]['subject']);
+    }
+
+    public static function get_template_message($key) {
+        $defaults = self::get_default_templates();
+        if (!isset($defaults[$key])) return '';
+        return get_option("pc_email_{$key}_message", $defaults[$key]['message']);
+    }
+
+    /**
+     * Render and send a configurable template email to a user.
+     * $key: 'welcome' | 'reminder_10' | 'expiration'
+     * $extra_tokens: additional placeholder => value (e.g. {expiry_date})
+     */
+    public static function send_template_email($user, $key, $extra_tokens = array()) {
+        if (!is_object($user) || empty($user->user_email)) return false;
+
+        $subject = self::get_template_subject($key);
+        $message = self::get_template_message($key);
+        if ($subject === '' || $message === '') return false;
+
+        $login_page_id   = (int) get_option('pc_login_page_id', 0);
+        $my_card_page_id = (int) get_option('pc_my_card_page_id', 0);
+        $login_url       = $login_page_id   ? get_permalink($login_page_id)   : wp_login_url();
+        $my_card_url     = $my_card_page_id ? get_permalink($my_card_page_id) : '';
+
+        $tokens = array_merge(array(
+            '{name}'        => isset($user->display_name) ? $user->display_name : '',
+            '{site_name}'   => get_bloginfo('name'),
+            '{login_url}'   => $login_url,
+            '{my_card_url}' => $my_card_url,
+            '{expiry_date}' => '',
+            '{days_left}'   => '',
+        ), $extra_tokens);
+
+        $subject = strtr($subject, $tokens);
+        $message = strtr($message, $tokens);
+
+        $from_name  = get_option('pc_email_from_name', get_bloginfo('name'));
+        $from_email = get_option('pc_email_from_address', get_bloginfo('admin_email'));
+
+        $html = self::wrap_html($message);
+
+        return (bool) wp_mail(
+            $user->user_email,
+            $subject,
+            $html,
+            array(
+                'Content-Type: text/html; charset=UTF-8',
+                'From: ' . $from_name . ' <' . $from_email . '>',
+            )
+        );
+    }
+
+    private static function wrap_html($message) {
+        $site_name = get_bloginfo('name');
+        return '<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+        <body style="font-family:Arial,sans-serif;color:#333;line-height:1.6;">
+            <div style="max-width:600px;margin:0 auto;padding:20px;">
+                <div style="background:#0073aa;color:#fff;padding:20px;text-align:center;">
+                    <h1 style="margin:0;">' . esc_html($site_name) . '</h1>
+                </div>
+                <div style="padding:30px;background:#f9f9f9;">' . wp_kses_post($message) . '</div>
+                <div style="text-align:center;padding:20px;font-size:12px;color:#666;">
+                    &copy; ' . date('Y') . ' ' . esc_html($site_name) . '. ' . esc_html__('All rights reserved.', 'personalized-cards') . '
+                </div>
+            </div>
+        </body></html>';
+    }
+
     public static function send_card_email($user_email, $user_name, $card_image_path, $google_wallet_url = '', $card_back_image_path = '') {
         $from_name = get_option('pc_email_from_name', get_bloginfo('name'));
         $from_email = get_option('pc_email_from_address', get_bloginfo('admin_email'));

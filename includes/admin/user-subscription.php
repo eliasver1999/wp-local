@@ -124,17 +124,35 @@ function pc_save_user_subscription_fields($user_id) {
 
     // Save custom expiry date
     $expiry_input = sanitize_text_field($_POST['pc_subscription_expiry'] ?? '');
+    $just_activated = ($is_member === '1' && $was_member !== '1');
     if ($expiry_input && strtotime($expiry_input)) {
         $new_expiry = date('Y-m-d', strtotime($expiry_input));
         update_user_meta($user_id, 'pc_subscription_expiry', $new_expiry);
 
-        if ($is_member === '1' && $was_member !== '1') {
+        if ($just_activated) {
             update_user_meta($user_id, 'pc_subscription_started', current_time('mysql'));
+        }
+
+        // Welcome email: send once when a user is first activated.
+        if ($just_activated) {
+            $welcome_sent_for = get_user_meta($user_id, 'pc_welcome_sent_at', true);
+            if (!$welcome_sent_for) {
+                $user = get_userdata($user_id);
+                if ($user) {
+                    $sent = PC_Email_Handler::send_template_email($user, 'welcome', array(
+                        '{expiry_date}' => date_i18n('F j, Y', strtotime($new_expiry)),
+                    ));
+                    if ($sent) {
+                        update_user_meta($user_id, 'pc_welcome_sent_at', current_time('mysql'));
+                        PC_Activity_Log::log('welcome_email_sent', 'Welcome email sent.', $user_id);
+                    }
+                }
+            }
         }
 
         // Send renewal confirmation if expiry date changed and member is active
         $expiry_changed = ($new_expiry !== date('Y-m-d', strtotime($old_expiry ?: '1970-01-01')));
-        if ($is_member === '1' && $expiry_changed) {
+        if ($is_member === '1' && $expiry_changed && !$just_activated) {
             $user = get_userdata($user_id);
             if ($user) {
                 pc_send_renewal_confirmation($user, $new_expiry);
