@@ -417,6 +417,9 @@ function pc_settings_page() {
     $fields = array(
         'name'   => array('label' => __('Member Name', 'personalized-cards'),    'default_x' => 100, 'default_y' => 150, 'default_size' => 24, 'default_color' => '#000000'),
         'expiry' => array('label' => __('Expiry Date', 'personalized-cards'),    'default_x' => 100, 'default_y' => 220, 'default_size' => 18, 'default_color' => '#000000'),
+        'father_name' => array('label' => __('Father Name', 'personalized-cards'),    'default_x' => 100, 'default_y' => 220, 'default_size' => 18, 'default_color' => '#000000'),
+        'sport' => array('label' => __('Sport', 'personalized-cards'),    'default_x' => 100, 'default_y' => 220, 'default_size' => 18, 'default_color' => '#000000'),
+        'image' => array('label' => __('Image', 'personalized-cards'),    'default_x' => 100, 'default_y' => 220, 'default_size' => 18, 'default_color' => '#000000')
     );
     ?>
     <div class="wrap">

@@ -31,7 +31,26 @@ class PC_Card_Creator {
                 get_option('pc_field_name_color', '#000000')
             );
         }
-
+        if (!empty($data['father_name']) && get_option('pc_field_name_enabled', '1') === '1') {
+            self::draw_text(
+                $image, $use_ttf, $font_path,
+                $data['father_name'],
+                (int) get_option('pc_field_father_x',    100),
+                (int) get_option('pc_field_father_y',    150),
+                (int) get_option('pc_field_father_size',  24),
+                get_option('pc_field_father_color', '#000000')
+            );
+        }
+         if (!empty($data['sport']) && get_option('pc_field_name_enabled', '1') === '1') {
+            self::draw_text(
+                $image, $use_ttf, $font_path,
+                $data['sport'],
+                (int) get_option('pc_field_sport_x',    100),
+                (int) get_option('pc_field_sport_y',    150),
+                (int) get_option('pc_field_sport_size',  24),
+                get_option('pc_field_sport_color', '#000000')
+            );
+        }
         // Draw expiry date field
         if (!empty($data['date']) && get_option('pc_field_expiry_enabled', '1') === '1') {
             $fmt            = get_option('pc_field_expiry_format', 'd/m/Y');
