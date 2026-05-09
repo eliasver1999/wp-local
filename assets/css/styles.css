@@ -228,12 +228,24 @@
 
 /* ── Login page ─────────────────────────────────────────── */
 .pc-login-wrap {
-    max-width: 400px;
-    margin: 40px auto;
-    padding: 30px;
+    max-width: 420px;
+    margin: 48px auto;
+    padding: 36px 40px;
     background: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    border-radius: 10px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+}
+
+.pc-login-wrap p {
+    margin-bottom: 0;
+}
+
+.pc-login-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 0 0 24px;
+    color: #1a1a1a;
+    text-align: center;
 }
 
 .pc-login-error {
@@ -243,6 +255,113 @@
     padding: 10px 15px;
     border-radius: 4px;
     margin-bottom: 16px;
+    font-size: 14px;
+}
+
+/* wp_login_form fields */
+.pc-login-wrap #loginform,
+.pc-login-wrap .login-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.pc-login-wrap .login-username,
+.pc-login-wrap .login-password,
+.pc-login-wrap .login-remember {
+    margin-bottom: 16px;
+}
+
+.pc-login-wrap label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #444;
+    margin-bottom: 6px;
+}
+
+.pc-login-wrap input[type="text"],
+.pc-login-wrap input[type="password"] {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 15px;
+    font-family: inherit;
+    color: #111;
+    background: #fafafa;
+    box-sizing: border-box;
+    transition: border-color .2s, box-shadow .2s;
+    outline: none;
+}
+
+.pc-login-wrap input[type="text"]:focus,
+.pc-login-wrap input[type="password"]:focus {
+    border-color: #0073aa;
+    box-shadow: 0 0 0 3px rgba(0,115,170,.15);
+    background: #fff;
+}
+
+.pc-login-wrap .login-remember label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 400;
+    font-size: 13px;
+    color: #555;
+    cursor: pointer;
+}
+
+.pc-login-wrap input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: #0073aa;
+    cursor: pointer;
+}
+
+.pc-login-wrap .login-submit,
+.pc-login-wrap p.submit {
+    margin-top: 8px;
+}
+
+.pc-login-wrap input[type="submit"],
+.pc-login-wrap .button-primary {
+    width: 100%;
+    padding: 11px 0;
+    background: #0073aa;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .2s;
+    letter-spacing: .02em;
+}
+
+.pc-login-wrap input[type="submit"]:hover,
+.pc-login-wrap .button-primary:hover {
+    background: #005d8c;
+}
+
+/* Lost password link */
+.pc-login-wrap #nav,
+.pc-login-wrap .login-lost-password {
+    text-align: center;
+    margin-top: 16px;
+    font-size: 13px;
+}
+
+.pc-login-wrap #nav a,
+.pc-login-wrap .login-lost-password a {
+    color: #0073aa;
+    text-decoration: none;
+}
+
+.pc-login-wrap #nav a:hover,
+.pc-login-wrap .login-lost-password a:hover {
+    text-decoration: underline;
 }
 
 /* ── My Card page ───────────────────────────────────────── */
