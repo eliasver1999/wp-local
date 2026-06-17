@@ -4,11 +4,8 @@
     "type": "wordpress-plugin",
     "license": "GPL-2.0-or-later",
     "require": {
-        "php": ">=7.4"
-    },
-    "suggest": {
-        "pkpass/pkpass": "^2.0 - Required for Apple Wallet integration",
-        "google/apiclient": "^2.0 - Required for Google Wallet integration"
+        "php": ">=7.4",
+        "pkpass/pkpass": "^1.8"
     },
     "autoload": {
         "psr-4": {

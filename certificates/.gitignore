@@ -1,0 +1,7 @@
+# Wallet credentials / private signing keys must NEVER be committed.
+# Ignore everything in this folder except the structural files below.
+*
+!.gitignore
+!.htaccess
+!.gitkeep
+!README.txt

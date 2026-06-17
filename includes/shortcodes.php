@@ -109,9 +109,15 @@ function pc_my_card_shortcode() {
                     <?php endif; ?>
 
                     <?php if (get_option('pc_enable_apple_wallet') && !$is_expired): ?>
-                        <button class="pc-btn pc-btn-apple-wallet" data-card-id="<?php echo esc_attr($latest->id); ?>">
+                        <?php
+                        $apple_url = wp_nonce_url(
+                            admin_url('admin-ajax.php?action=pc_apple_wallet&card_id=' . absint($latest->id)),
+                            'pc_apple_wallet_' . $latest->id
+                        );
+                        ?>
+                        <a href="<?php echo esc_url($apple_url); ?>" class="pc-btn pc-btn-apple-wallet">
                             <?php _e('Add to Apple Wallet', 'personalized-cards'); ?>
-                        </button>
+                        </a>
                     <?php endif; ?>
 
                     <?php if (get_option('pc_enable_google_wallet') && !$is_expired): ?>

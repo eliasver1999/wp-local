@@ -45,6 +45,8 @@ class PC_Cron {
             if ($expiry_date < $today && $is_active === '1') {
                 update_user_meta($user_id, 'pc_subscription_active', '0');
                 PC_Activity_Log::log('membership_expired', 'Auto-expired. Expiry was ' . $expiry_date, $user_id);
+                // Push the now-expired state to saved wallet passes.
+                do_action('pc_membership_changed', $user_id);
             }
 
             // ── Expiration email — gated on sent_for (not is_active) so we

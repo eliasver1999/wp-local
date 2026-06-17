@@ -133,7 +133,7 @@ class PC_Email_Handler {
         </body></html>';
     }
 
-    public static function send_card_email($user_email, $user_name, $card_image_path, $google_wallet_url = '', $card_back_image_path = '') {
+    public static function send_card_email($user_email, $user_name, $card_image_path, $google_wallet_url = '', $card_back_image_path = '', $pkpass_path = '') {
         $from_name = get_option('pc_email_from_name', get_bloginfo('name'));
         $from_email = get_option('pc_email_from_address', get_bloginfo('admin_email'));
         $subject = get_option('pc_email_subject', __('Your Personalized Card', 'personalized-cards'));
@@ -188,6 +188,8 @@ class PC_Email_Handler {
                             🎫 Add to Google Wallet
                         </a>
                     </div>' : '') . '
+                    ' . (($pkpass_path && file_exists($pkpass_path)) ? '
+                    <p style="text-align:center;color:#555;font-size:14px;">📱 ' . esc_html__('An Apple Wallet pass is attached — open it on your iPhone to add your card to Apple Wallet.', 'personalized-cards') . '</p>' : '') . '
                 </div>
                 <div class="footer">
                     <p>&copy; ' . date('Y') . ' ' . esc_html(get_bloginfo('name')) . '. All rights reserved.</p>
@@ -199,7 +201,7 @@ class PC_Email_Handler {
         // Use WordPress PHPMailer. Bind to a named callback so we can remove it
         // after sending — otherwise repeated calls (bulk send) accumulate
         // closures and every recipient gets every previous user's attachments.
-        $attach_cb = function($phpmailer) use ($card_image_path, $card_back_image_path) {
+        $attach_cb = function($phpmailer) use ($card_image_path, $card_back_image_path, $pkpass_path) {
             $phpmailer->clearAttachments();
             if (file_exists($card_image_path)) {
                 $phpmailer->AddEmbeddedImage($card_image_path, 'card_image', basename($card_image_path));
@@ -208,6 +210,9 @@ class PC_Email_Handler {
             if ($card_back_image_path && file_exists($card_back_image_path)) {
                 $phpmailer->AddEmbeddedImage($card_back_image_path, 'card_back_image', basename($card_back_image_path));
                 $phpmailer->AddAttachment($card_back_image_path, basename($card_back_image_path));
+            }
+            if ($pkpass_path && file_exists($pkpass_path)) {
+                $phpmailer->AddAttachment($pkpass_path, 'membership.pkpass', 'base64', 'application/vnd.apple.pkpass');
             }
         };
         add_action('phpmailer_init', $attach_cb);

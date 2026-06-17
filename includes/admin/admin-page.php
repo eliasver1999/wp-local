@@ -565,6 +565,9 @@ function pc_export_settings() {
         'pc_email_reminder_10_subject', 'pc_email_reminder_10_message',
         'pc_email_expiration_subject', 'pc_email_expiration_message',
         'pc_enable_apple_wallet', 'pc_enable_google_wallet', 'pc_google_wallet_issuer_id',
+        'pc_apple_pass_type_id', 'pc_apple_team_id', 'pc_apple_logo', // cert password intentionally excluded from exports
+        'pc_enable_wallet_updates', 'pc_wallet_bg_color', 'pc_wallet_label_color', 'pc_wallet_logo_text',
+
         'pc_field_expiry_format', 'pc_qr_content_template',
         'pc_field_qr_enabled', 'pc_field_qr_x', 'pc_field_qr_y', 'pc_field_qr_size',
         'pc_field_image_enabled', 'pc_field_image_x', 'pc_field_image_y', 'pc_field_image_w', 'pc_field_image_h',
@@ -671,6 +674,36 @@ function pc_settings_page() {
         }
     }
 
+    // Handle Apple Wallet certificate uploads (.p12 cert + WWDR .pem)
+    if (isset($_POST['pc_upload_apple_certs']) && check_admin_referer('pc_upload_apple_certs_action')) {
+        wp_mkdir_p(PC_PLUGIN_DIR . 'certificates/');
+
+        $apple_uploads = array(
+            'pc_apple_p12_file'  => array('ext' => 'p12', 'dest' => 'apple-certificate.p12', 'label' => __('Pass Type ID certificate (.p12)', 'personalized-cards')),
+            'pc_apple_wwdr_file' => array('ext' => 'pem', 'dest' => 'apple-wwdr.pem',        'label' => __('Apple WWDR certificate (.pem)', 'personalized-cards')),
+        );
+
+        foreach ($apple_uploads as $field => $cfg) {
+            if (empty($_FILES[$field]['name'])) {
+                continue;
+            }
+            $file = $_FILES[$field];
+            $ext  = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            if ($ext !== $cfg['ext']) {
+                $notices[] = array('error', sprintf(__('%1$s must be a .%2$s file.', 'personalized-cards'), $cfg['label'], $cfg['ext']));
+            } elseif ($file['error'] !== UPLOAD_ERR_OK) {
+                $notices[] = array('error', sprintf(__('Upload error for %s. Please try again.', 'personalized-cards'), $cfg['label']));
+            } else {
+                $dest = PC_PLUGIN_DIR . 'certificates/' . $cfg['dest'];
+                if (move_uploaded_file($file['tmp_name'], $dest)) {
+                    $notices[] = array('success', sprintf(__('%s uploaded.', 'personalized-cards'), $cfg['label']));
+                } else {
+                    $notices[] = array('error', sprintf(__('Failed to save %s. Check directory permissions.', 'personalized-cards'), $cfg['label']));
+                }
+            }
+        }
+    }
+
     // Handle template upload (separate form)
     if (isset($_POST['pc_upload_template']) && check_admin_referer('pc_upload_template_action')) {
         if (!empty($_FILES['pc_template_file']['name'])) {
@@ -763,6 +796,14 @@ function pc_settings_page() {
         }
     }
 
+    // Handle "Test wallet configuration"
+    if (isset($_POST['pc_test_wallet']) && check_admin_referer('pc_test_wallet_action')) {
+        foreach (PC_Wallet_Handler::test_configuration() as $r) {
+            $type = $r['status'] === 'ok' ? 'success' : ($r['status'] === 'error' ? 'error' : 'warning');
+            $notices[] = array($type, sprintf('%s — %s', $r['service'], $r['message']));
+        }
+    }
+
     // Handle main settings save
     if (isset($_POST['pc_save_settings'])) {
         check_admin_referer('pc_settings_save');
@@ -786,6 +827,19 @@ function pc_settings_page() {
         update_option('pc_enable_apple_wallet',     isset($_POST['pc_enable_apple_wallet']) ? '1' : '0');
         update_option('pc_enable_google_wallet',    isset($_POST['pc_enable_google_wallet']) ? '1' : '0');
         update_option('pc_google_wallet_issuer_id', sanitize_text_field($_POST['pc_google_wallet_issuer_id']));
+        update_option('pc_apple_pass_type_id',      sanitize_text_field($_POST['pc_apple_pass_type_id'] ?? ''));
+        update_option('pc_apple_team_id',           sanitize_text_field($_POST['pc_apple_team_id'] ?? ''));
+        // Only overwrite the stored password when a new value is entered (the field is
+        // rendered blank), so saving other settings never wipes or exposes it.
+        if (isset($_POST['pc_apple_cert_password']) && $_POST['pc_apple_cert_password'] !== '') {
+            update_option('pc_apple_cert_password', (string) $_POST['pc_apple_cert_password']);
+        }
+        update_option('pc_apple_logo',              esc_url_raw($_POST['pc_apple_logo'] ?? ''));
+        // Auto-update + branding (shared by both wallets)
+        update_option('pc_enable_wallet_updates',   isset($_POST['pc_enable_wallet_updates']) ? '1' : '0');
+        update_option('pc_wallet_bg_color',         sanitize_hex_color($_POST['pc_wallet_bg_color'] ?? '') ?: '#1a73e8');
+        update_option('pc_wallet_label_color',      sanitize_hex_color($_POST['pc_wallet_label_color'] ?? '') ?: '#ffffff');
+        update_option('pc_wallet_logo_text',        sanitize_text_field($_POST['pc_wallet_logo_text'] ?? ''));
 
         // Font & text overlay settings
         update_option('pc_font_file', sanitize_file_name($_POST['pc_font_file'] ?? ''));
@@ -828,6 +882,14 @@ function pc_settings_page() {
     $enable_apple_wallet  = get_option('pc_enable_apple_wallet', '0');
     $enable_google_wallet = get_option('pc_enable_google_wallet', '0');
     $google_wallet_issuer = get_option('pc_google_wallet_issuer_id', '');
+    $apple_pass_type_id   = get_option('pc_apple_pass_type_id', '');
+    $apple_team_id        = get_option('pc_apple_team_id', '');
+    $apple_cert_password  = get_option('pc_apple_cert_password', '');
+    $apple_logo           = get_option('pc_apple_logo', '');
+    $enable_wallet_updates = get_option('pc_enable_wallet_updates', '0');
+    $wallet_bg_color      = get_option('pc_wallet_bg_color', '#1a73e8');
+    $wallet_label_color   = get_option('pc_wallet_label_color', '#ffffff');
+    $wallet_logo_text     = get_option('pc_wallet_logo_text', '');
     $template_files       = glob($templates_dir . '*.jpg') ?: array();
     $font_files           = glob($fonts_dir . '*.ttf') ?: array();
     $active_font          = get_option('pc_font_file', 'arial.ttf');
@@ -855,7 +917,8 @@ function pc_settings_page() {
         <h1><?php _e('Personalized Cards Settings', 'personalized-cards'); ?></h1>
 
         <?php foreach ($notices as [$type, $msg]): ?>
-            <div class="notice notice-<?php echo $type === 'error' ? 'error' : 'success'; ?> is-dismissible"><p><?php echo esc_html($msg); ?></p></div>
+            <?php $notice_cls = in_array($type, array('error', 'warning', 'info'), true) ? $type : 'success'; ?>
+            <div class="notice notice-<?php echo esc_attr($notice_cls); ?> is-dismissible"><p><?php echo esc_html($msg); ?></p></div>
         <?php endforeach; ?>
 
         <?php if ($login_page_url || $my_card_page_url): ?>
@@ -1348,9 +1411,39 @@ function pc_settings_page() {
                     <td>
                         <label>
                             <input type="checkbox" name="pc_enable_apple_wallet" value="1" <?php checked($enable_apple_wallet, '1'); ?>>
-                            <?php _e('Enable Apple Wallet', 'personalized-cards'); ?>
+                            <?php _e('Enable Apple Wallet (iPhone)', 'personalized-cards'); ?>
                         </label>
-                        <p class="description"><?php _e('Requires Apple Developer certificates in /certificates/.', 'personalized-cards'); ?></p>
+                        <p class="description">
+                            <?php _e('Steps: 1) In the <a href="https://developer.apple.com/account/resources/identifiers/list/passTypeId" target="_blank">Apple Developer portal</a> create a <strong>Pass Type ID</strong> and generate its certificate. 2) Export that certificate from Keychain as a <strong>.p12</strong> file. 3) Download the <strong>Apple WWDR</strong> certificate. 4) Enter the IDs below and upload both certificates further down.', 'personalized-cards'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="pc_apple_pass_type_id"><?php _e('Pass Type ID', 'personalized-cards'); ?></label></th>
+                    <td>
+                        <input type="text" name="pc_apple_pass_type_id" id="pc_apple_pass_type_id" value="<?php echo esc_attr($apple_pass_type_id); ?>" class="regular-text" placeholder="pass.com.yoursite.membercard">
+                        <p class="description"><?php _e('The Pass Type identifier you registered (starts with "pass.").', 'personalized-cards'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="pc_apple_team_id"><?php _e('Team ID', 'personalized-cards'); ?></label></th>
+                    <td>
+                        <input type="text" name="pc_apple_team_id" id="pc_apple_team_id" value="<?php echo esc_attr($apple_team_id); ?>" class="regular-text" placeholder="A1B2C3D4E5">
+                        <p class="description"><?php _e('Your 10-character Apple Developer Team ID (Membership page).', 'personalized-cards'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="pc_apple_cert_password"><?php _e('Certificate Password', 'personalized-cards'); ?></label></th>
+                    <td>
+                        <input type="password" name="pc_apple_cert_password" id="pc_apple_cert_password" value="" class="regular-text" autocomplete="new-password" placeholder="<?php echo $apple_cert_password ? esc_attr__('•••••••• (saved — leave blank to keep)', 'personalized-cards') : ''; ?>">
+                        <p class="description"><?php _e('The password you set when exporting the .p12 certificate. Leave blank to keep the saved password (or if the certificate has none).', 'personalized-cards'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="pc_apple_logo"><?php _e('Wallet Logo / Icon URL', 'personalized-cards'); ?></label></th>
+                    <td>
+                        <input type="url" name="pc_apple_logo" id="pc_apple_logo" value="<?php echo esc_attr($apple_logo); ?>" class="regular-text" placeholder="<?php echo esc_attr(home_url('/wp-content/uploads/...png')); ?>">
+                        <p class="description"><?php _e('Square PNG shown on the pass (required by Apple). If blank, the site icon or the card image is used.', 'personalized-cards'); ?></p>
                     </td>
                 </tr>
                 <tr>
@@ -1370,6 +1463,50 @@ function pc_settings_page() {
                     <td>
                         <input type="text" name="pc_google_wallet_issuer_id" id="pc_google_wallet_issuer_id" value="<?php echo esc_attr($google_wallet_issuer); ?>" class="regular-text" placeholder="3388000000012345678">
                         <p class="description"><?php _e('Found in the Google Wallet Business Console under your issuer account.', 'personalized-cards'); ?></p>
+                    </td>
+                </tr>
+
+                <tr><th colspan="2"><hr><h3 style="margin:0;"><?php _e('Pass Branding', 'personalized-cards'); ?></h3></th></tr>
+                <tr>
+                    <th><label for="pc_wallet_logo_text"><?php _e('Logo Text', 'personalized-cards'); ?></label></th>
+                    <td>
+                        <input type="text" name="pc_wallet_logo_text" id="pc_wallet_logo_text" value="<?php echo esc_attr($wallet_logo_text); ?>" class="regular-text" placeholder="<?php echo esc_attr(get_bloginfo('name')); ?>">
+                        <p class="description"><?php _e('Shown beside the logo on the pass. Defaults to the site name if blank.', 'personalized-cards'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="pc_wallet_bg_color"><?php _e('Background Color', 'personalized-cards'); ?></label></th>
+                    <td>
+                        <input type="color" name="pc_wallet_bg_color" id="pc_wallet_bg_color" value="<?php echo esc_attr($wallet_bg_color); ?>">
+                        <p class="description"><?php _e('Background color of the pass (Apple & Google).', 'personalized-cards'); ?></p>
+                    </td>
+                </tr>
+                <tr>
+                    <th><label for="pc_wallet_label_color"><?php _e('Text Color', 'personalized-cards'); ?></label></th>
+                    <td>
+                        <input type="color" name="pc_wallet_label_color" id="pc_wallet_label_color" value="<?php echo esc_attr($wallet_label_color); ?>">
+                        <p class="description"><?php _e('Label/foreground text color (Apple Wallet).', 'personalized-cards'); ?></p>
+                    </td>
+                </tr>
+
+                <tr><th colspan="2"><hr><h3 style="margin:0;"><?php _e('Automatic Updates', 'personalized-cards'); ?></h3></th></tr>
+                <tr>
+                    <th><?php _e('Auto-update passes', 'personalized-cards'); ?></th>
+                    <td>
+                        <label>
+                            <input type="checkbox" name="pc_enable_wallet_updates" value="1" <?php checked($enable_wallet_updates, '1'); ?>>
+                            <?php _e('Push pass updates when a membership is renewed or expires', 'personalized-cards'); ?>
+                        </label>
+                        <p class="description">
+                            <?php _e('Google passes update over the air automatically. Apple passes require the web service URL below to be publicly reachable over HTTPS, plus a valid Pass Type ID certificate (used to sign the push).', 'personalized-cards'); ?>
+                        </p>
+                        <p class="description">
+                            <strong><?php _e('Apple web service URL:', 'personalized-cards'); ?></strong>
+                            <code><?php echo esc_html(PC_Wallet_WebService::base_url()); ?></code>
+                            <?php if (strpos(home_url(), 'https://') !== 0): ?>
+                                <br><span style="color:#b00;"><?php _e('⚠ Your site is not on HTTPS — Apple auto-update will not work until it is.', 'personalized-cards'); ?></span>
+                            <?php endif; ?>
+                        </p>
                     </td>
                 </tr>
             </table>
@@ -1402,6 +1539,53 @@ function pc_settings_page() {
                     </tr>
                 </table>
                 <?php submit_button(__('Upload Key', 'personalized-cards'), 'secondary', 'pc_upload_gw_key'); ?>
+            </form>
+        </div>
+
+        <!-- Apple Wallet certificate upload (separate form for enctype) -->
+        <?php
+        $apple_p12_exists  = file_exists(PC_PLUGIN_DIR . 'certificates/apple-certificate.p12');
+        $apple_wwdr_exists = file_exists(PC_PLUGIN_DIR . 'certificates/apple-wwdr.pem');
+        ?>
+        <div class="pc-admin-section">
+            <h2><?php _e('Upload Apple Wallet Certificates', 'personalized-cards'); ?></h2>
+            <p>
+                <?php echo $apple_p12_exists
+                    ? '<span style="color:green;">&#10003; ' . esc_html__('Pass Type ID certificate uploaded.', 'personalized-cards') . '</span>'
+                    : '<span style="color:#b00;">&#10007; ' . esc_html__('No Pass Type ID certificate uploaded.', 'personalized-cards') . '</span>'; ?><br>
+                <?php echo $apple_wwdr_exists
+                    ? '<span style="color:green;">&#10003; ' . esc_html__('Apple WWDR certificate uploaded.', 'personalized-cards') . '</span>'
+                    : '<span style="color:#b00;">&#10007; ' . esc_html__('No Apple WWDR certificate uploaded.', 'personalized-cards') . '</span>'; ?>
+            </p>
+            <form method="post" enctype="multipart/form-data">
+                <?php wp_nonce_field('pc_upload_apple_certs_action'); ?>
+                <table class="form-table">
+                    <tr>
+                        <th><label for="pc_apple_p12_file"><?php _e('Pass Type ID Certificate (.p12)', 'personalized-cards'); ?></label></th>
+                        <td>
+                            <input type="file" name="pc_apple_p12_file" id="pc_apple_p12_file" accept=".p12">
+                            <p class="description"><?php _e('Export from Keychain Access: select your Pass Type ID certificate → Export → Personal Information Exchange (.p12). Set the password in the Digital Wallet section above.', 'personalized-cards'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="pc_apple_wwdr_file"><?php _e('Apple WWDR Certificate (.pem)', 'personalized-cards'); ?></label></th>
+                        <td>
+                            <input type="file" name="pc_apple_wwdr_file" id="pc_apple_wwdr_file" accept=".pem">
+                            <p class="description"><?php _e('Download "Worldwide Developer Relations" certificate from Apple, then convert to PEM: openssl x509 -inform der -in AppleWWDRCAG4.cer -out apple-wwdr.pem', 'personalized-cards'); ?></p>
+                        </td>
+                    </tr>
+                </table>
+                <?php submit_button(__('Upload Certificates', 'personalized-cards'), 'secondary', 'pc_upload_apple_certs'); ?>
+            </form>
+        </div>
+
+        <!-- Test wallet configuration -->
+        <div class="pc-admin-section">
+            <h2><?php _e('Test Wallet Configuration', 'personalized-cards'); ?></h2>
+            <p class="description"><?php _e('Runs both wallet generators with sample data and reports success or the exact error (missing cert, wrong password, unsigned JWT, etc.). Results appear as notices at the top of this page. No phone required.', 'personalized-cards'); ?></p>
+            <form method="post">
+                <?php wp_nonce_field('pc_test_wallet_action'); ?>
+                <?php submit_button(__('Run Wallet Test', 'personalized-cards'), 'secondary', 'pc_test_wallet', false); ?>
             </form>
         </div>
 
@@ -1628,13 +1812,26 @@ function pc_ajax_admin_create_card() {
         }
     }
 
+    // Generate an Apple Wallet .pkpass to attach, if enabled.
+    $pkpass_path = '';
+    if (get_option('pc_enable_apple_wallet', '0') === '1') {
+        $pk = PC_Wallet_Handler::generate_pkpass_to_file($card_data, $output_path, $user_id);
+        if (!is_wp_error($pk)) {
+            $pkpass_path = $pk;
+        }
+    }
+
     $msg = sprintf(__('Card created for %s.', 'personalized-cards'), $user->display_name);
 
     if ($send_email) {
-        $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url, $generated_back_path);
+        $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url, $generated_back_path, $pkpass_path);
         $msg .= $sent
             ? ' ' . __('Email sent.', 'personalized-cards')
             : ' ' . __('Card created but email failed.', 'personalized-cards');
+    }
+
+    if ($pkpass_path && file_exists($pkpass_path)) {
+        @unlink($pkpass_path);
     }
 
     $response = array('message' => $msg);
@@ -1798,7 +1995,17 @@ function pc_admin_process_create_and_email_for_user($user_id) {
         if (!is_wp_error($w)) $wallet_url = $w;
     }
 
-    $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url);
+    $pkpass_path = '';
+    if (get_option('pc_enable_apple_wallet', '0') === '1') {
+        $pk = PC_Wallet_Handler::generate_pkpass_to_file($card_data, $output_path, $user_id);
+        if (!is_wp_error($pk)) $pkpass_path = $pk;
+    }
+
+    $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url, '', $pkpass_path);
+
+    if ($pkpass_path && file_exists($pkpass_path)) {
+        @unlink($pkpass_path);
+    }
     $error = '';
     if (!$emailed) {
         $smtp = PC_Email_Handler::get_last_error();

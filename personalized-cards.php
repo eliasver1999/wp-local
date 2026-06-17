@@ -27,6 +27,7 @@ require_once PC_PLUGIN_DIR . 'includes/class-card-creator.php';
 require_once PC_PLUGIN_DIR . 'includes/class-subscription-handler.php';
 require_once PC_PLUGIN_DIR . 'includes/class-email-handler.php';
 require_once PC_PLUGIN_DIR . 'includes/class-wallet-handler.php';
+require_once PC_PLUGIN_DIR . 'includes/class-wallet-webservice.php';
 require_once PC_PLUGIN_DIR . 'includes/class-cron.php';
 require_once PC_PLUGIN_DIR . 'includes/admin/admin-page.php';
 require_once PC_PLUGIN_DIR . 'includes/admin/user-subscription.php';
@@ -45,6 +46,8 @@ register_activation_hook(__FILE__, 'pc_activate_plugin');
 function pc_activate_plugin() {
     PC_Database::create_tables();
     PC_Activity_Log::create_table();
+    PC_Wallet_WebService::create_table();
+    update_option('pc_wallet_ws_db_version', '1');
     PC_Cron::register();
 
     // Create uploads directory for cards
@@ -106,7 +109,17 @@ function pc_init_plugin() {
     PC_Database::maybe_add_back_image_column();
     PC_Activity_Log::create_table(); // idempotent — creates if missing
     PC_Cron::register();             // schedules if not already scheduled
+
+    // Apple Wallet web service: register REST routes + ensure its table exists.
+    PC_Wallet_WebService::init();
+    if (get_option('pc_wallet_ws_db_version') !== '1') {
+        PC_Wallet_WebService::create_table();
+        update_option('pc_wallet_ws_db_version', '1');
+    }
 }
+
+// Refresh saved wallet passes whenever a member's status/expiry changes.
+add_action('pc_membership_changed', array('PC_Wallet_Handler', 'on_membership_changed'));
 
 // Enqueue scripts and styles
 add_action('wp_enqueue_scripts', 'pc_enqueue_scripts');

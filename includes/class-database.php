@@ -46,9 +46,18 @@ class PC_Database {
     public static function get_user_cards($user_id) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'personalized_cards';
-        
+
         return $wpdb->get_results(
             $wpdb->prepare("SELECT * FROM $table_name WHERE user_id = %d ORDER BY created_at DESC", $user_id)
+        );
+    }
+
+    public static function get_card($card_id) {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'personalized_cards';
+
+        return $wpdb->get_row(
+            $wpdb->prepare("SELECT * FROM $table_name WHERE id = %d", $card_id)
         );
     }
     

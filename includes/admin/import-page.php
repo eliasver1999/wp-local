@@ -231,6 +231,7 @@ function pc_process_csv_import($file_path) {
             if ($expiry_date && strtotime($expiry_date)) {
                 update_user_meta($user_id, 'pc_subscription_expiry', date('Y-m-d', strtotime($expiry_date)));
             }
+            do_action('pc_membership_changed', $user_id);
         }
 
         $rows[] = array('row' => $row_num, 'email' => $email, 'status' => $status, 'note' => $note);

@@ -183,6 +183,9 @@ function pc_save_user_subscription_fields($user_id) {
     if (isset($_POST['pc_member_image'])) {
         update_user_meta($user_id, 'pc_member_image', esc_url_raw($_POST['pc_member_image']));
     }
+
+    // Membership/expiry may have changed — refresh any saved wallet passes.
+    do_action('pc_membership_changed', $user_id);
 }
 
 // Add subscription column to users list
