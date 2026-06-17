@@ -58,88 +58,144 @@ function pc_my_card_shortcode() {
         update_user_meta($user_id, 'pc_subscription_active', '0');
     }
 
+    // ── Presentation data ──────────────────────────────────────────
+    $member_photo = get_user_meta($user_id, 'pc_member_image', true);
+    $member_id    = get_user_meta($user_id, 'pc_member_id', true);
+    $started      = get_user_meta($user_id, 'pc_subscription_started', true);
+
+    if ($is_expired) {
+        $status_key = 'expired';
+        $status_lbl = __('Expired', 'personalized-cards');
+    } elseif ($expiry_date && $days_left <= 30) {
+        $status_key = 'soon';
+        $status_lbl = __('Expiring soon', 'personalized-cards');
+    } else {
+        $status_key = 'active';
+        $status_lbl = __('Active', 'personalized-cards');
+    }
+
+    // Days-left meter: proportion of the term remaining (falls back to a 1-year term).
+    $meter_pct = 0;
+    if (!$is_expired && $expiry_date) {
+        $term = ($started && strtotime($started))
+            ? max(1, (strtotime($expiry_date) - strtotime($started)) / DAY_IN_SECONDS)
+            : 365;
+        $meter_pct = max(4, min(100, round(($days_left / $term) * 100)));
+    }
+
     ob_start();
     ?>
-    <div class="pc-my-card-wrap">
-        <div class="pc-member-info">
-            <p><?php echo esc_html(sprintf(__('Welcome, %s', 'personalized-cards'), $user->display_name)); ?></p>
+    <div class="pc-my-card-wrap pc-status-<?php echo esc_attr($status_key); ?>">
+
+        <header class="pc-mc-header">
+            <div class="pc-mc-avatar">
+                <?php if ($member_photo): ?>
+                    <img src="<?php echo esc_url($member_photo); ?>" alt="">
+                <?php else: ?>
+                    <?php echo get_avatar($user_id, 64); ?>
+                <?php endif; ?>
+            </div>
+            <div class="pc-mc-identity">
+                <h2 class="pc-mc-name"><?php echo esc_html($user->display_name); ?></h2>
+                <?php if ($member_id): ?>
+                    <p class="pc-mc-memberid"><?php echo esc_html(sprintf(__('Member #%s', 'personalized-cards'), $member_id)); ?></p>
+                <?php endif; ?>
+            </div>
+            <span class="pc-status-badge pc-badge-<?php echo esc_attr($status_key); ?>"><?php echo esc_html($status_lbl); ?></span>
+        </header>
+
+        <div class="pc-mc-status">
             <?php if (!$is_expired): ?>
-                <p class="pc-expiry-notice">
-                    <?php echo esc_html(sprintf(__('Membership active — expires %s (%d days left)', 'personalized-cards'), date_i18n('F j, Y', strtotime($expiry_date)), $days_left)); ?>
+                <div class="pc-meter" role="img" aria-label="<?php echo esc_attr(sprintf(__('%d days remaining', 'personalized-cards'), max(0, $days_left))); ?>">
+                    <span class="pc-meter-fill" style="width:<?php echo (int) $meter_pct; ?>%"></span>
+                </div>
+                <p class="pc-mc-status-text">
+                    <?php echo esc_html(sprintf(
+                        _n('%1$d day left · expires %2$s', '%1$d days left · expires %2$s', max(0, $days_left), 'personalized-cards'),
+                        max(0, $days_left),
+                        date_i18n('F j, Y', strtotime($expiry_date))
+                    )); ?>
                 </p>
             <?php else: ?>
-                <p class="pc-expiry-notice pc-expired">
+                <p class="pc-mc-status-text pc-mc-expired-text">
                     <?php _e('Your membership has expired. Please contact an administrator to renew.', 'personalized-cards'); ?>
                 </p>
             <?php endif; ?>
         </div>
 
         <?php if (empty($cards)): ?>
-            <p class="pc-no-card"><?php _e('Your card has not been created yet. Please check back later.', 'personalized-cards'); ?></p>
+            <div class="pc-no-card">
+                <p><?php _e('Your card has not been created yet. Please check back later.', 'personalized-cards'); ?></p>
+            </div>
         <?php else:
-            $latest = $cards[0];
+            $latest    = $cards[0];
+            $card_data = json_decode($latest->card_data, true) ?: array('name' => $user->display_name);
+            $has_back  = !empty($latest->card_back_image);
             ?>
             <div class="pc-card-display">
                 <?php if ($latest->card_image): ?>
-                    <div class="pc-card-image-wrap <?php echo $is_expired ? 'pc-card-expired' : ''; ?>">
-                        <img src="<?php echo esc_url($latest->card_image); ?>" alt="<?php esc_attr_e('Your Membership Card', 'personalized-cards'); ?>">
-                        <?php if ($is_expired): ?>
-                            <div class="pc-expired-overlay" aria-hidden="true">
-                                <span><?php _e('EXPIRED', 'personalized-cards'); ?></span>
+                    <div class="pc-card-viewer">
+                        <div class="pc-card-stage <?php echo $is_expired ? 'pc-card-expired' : ''; ?>">
+                            <img class="pc-card-face is-active" data-face="front"
+                                 src="<?php echo esc_url($latest->card_image); ?>"
+                                 alt="<?php esc_attr_e('Your Membership Card', 'personalized-cards'); ?>">
+                            <?php if ($has_back): ?>
+                                <img class="pc-card-face" data-face="back"
+                                     src="<?php echo esc_url($latest->card_back_image); ?>"
+                                     alt="<?php esc_attr_e('Card Back', 'personalized-cards'); ?>">
+                            <?php endif; ?>
+                            <?php if ($is_expired): ?>
+                                <div class="pc-expired-overlay" aria-hidden="true"><span><?php _e('EXPIRED', 'personalized-cards'); ?></span></div>
+                            <?php endif; ?>
+                        </div>
+                        <?php if ($has_back): ?>
+                            <div class="pc-flip-tabs">
+                                <button type="button" class="pc-flip-tab is-active" data-face="front"><?php _e('Front', 'personalized-cards'); ?></button>
+                                <button type="button" class="pc-flip-tab" data-face="back"><?php _e('Back', 'personalized-cards'); ?></button>
                             </div>
                         <?php endif; ?>
                     </div>
                 <?php endif; ?>
 
-                <?php if (!empty($latest->card_back_image)): ?>
-                    <div class="pc-card-image-wrap pc-card-back" style="margin-top:12px;">
-                        <img src="<?php echo esc_url($latest->card_back_image); ?>" alt="<?php esc_attr_e('Card Back', 'personalized-cards'); ?>">
-                    </div>
-                <?php endif; ?>
+                <p class="pc-card-date">
+                    <?php echo esc_html(sprintf(__('Issued %s', 'personalized-cards'), date_i18n('F j, Y', strtotime($latest->created_at)))); ?>
+                </p>
 
                 <div class="pc-card-actions">
                     <?php if ($latest->card_image && !$is_expired): ?>
                         <a href="<?php echo esc_url($latest->card_image); ?>" download class="pc-btn pc-btn-download">
-                            <?php _e('Download Card', 'personalized-cards'); ?>
+                            <span class="pc-btn-ico" aria-hidden="true">⬇</span><?php _e('Download', 'personalized-cards'); ?>
                         </a>
                     <?php elseif ($latest->card_image && $is_expired): ?>
                         <span class="pc-btn pc-btn-disabled" title="<?php esc_attr_e('Renew your membership to download', 'personalized-cards'); ?>">
-                            <?php _e('Download Card', 'personalized-cards'); ?>
+                            <?php _e('Download', 'personalized-cards'); ?>
                         </span>
                     <?php endif; ?>
 
-                    <?php if (get_option('pc_enable_apple_wallet') && !$is_expired): ?>
-                        <?php
+                    <?php if (get_option('pc_enable_apple_wallet') && !$is_expired):
                         $apple_url = wp_nonce_url(
                             admin_url('admin-ajax.php?action=pc_apple_wallet&card_id=' . absint($latest->id)),
                             'pc_apple_wallet_' . $latest->id
-                        );
-                        ?>
+                        ); ?>
                         <a href="<?php echo esc_url($apple_url); ?>" class="pc-btn pc-btn-apple-wallet">
                             <?php _e('Add to Apple Wallet', 'personalized-cards'); ?>
                         </a>
                     <?php endif; ?>
 
-                    <?php if (get_option('pc_enable_google_wallet') && !$is_expired): ?>
-                        <?php
-                        $card_data = json_decode($latest->card_data, true) ?: array('name' => $user->display_name);
-                        $gw_link   = PC_Wallet_Handler::create_google_wallet_link($card_data, $user_id, $latest->card_image);
-                        $gw_link   = is_wp_error($gw_link) ? false : $gw_link;
+                    <?php if (get_option('pc_enable_google_wallet') && !$is_expired):
+                        $gw_link = PC_Wallet_Handler::create_google_wallet_link($card_data, $user_id, $latest->card_image);
+                        $gw_link = is_wp_error($gw_link) ? false : $gw_link;
                         if ($gw_link): ?>
-                            <a href="<?php echo esc_url($gw_link); ?>" target="_blank" class="pc-btn pc-btn-google-wallet">
+                            <a href="<?php echo esc_url($gw_link); ?>" target="_blank" rel="noopener" class="pc-btn pc-btn-google-wallet">
                                 <?php _e('Add to Google Wallet', 'personalized-cards'); ?>
                             </a>
-                        <?php endif; ?>
-                    <?php endif; ?>
-
-                    <?php if ($is_expired): ?>
-                        <p class="pc-renew-msg"><?php _e('Contact an administrator to renew your membership and restore full access.', 'personalized-cards'); ?></p>
-                    <?php endif; ?>
+                        <?php endif;
+                    endif; ?>
                 </div>
 
-                <p class="pc-card-date">
-                    <?php echo esc_html(sprintf(__('Issued: %s', 'personalized-cards'), date_i18n('F j, Y', strtotime($latest->created_at)))); ?>
-                </p>
+                <?php if ($is_expired): ?>
+                    <p class="pc-renew-msg"><?php _e('Contact an administrator to renew your membership and restore full access.', 'personalized-cards'); ?></p>
+                <?php endif; ?>
             </div>
 
             <?php if (count($cards) > 1): ?>
@@ -151,7 +207,7 @@ function pc_my_card_shortcode() {
                                 <?php if ($card->card_image): ?>
                                     <img src="<?php echo esc_url($card->card_image); ?>" alt="Card">
                                 <?php endif; ?>
-                                <p><?php echo esc_html(date_i18n('F j, Y', strtotime($card->created_at))); ?></p>
+                                <p><?php echo esc_html(date_i18n('M j, Y', strtotime($card->created_at))); ?></p>
                                 <?php if ($card->card_image): ?>
                                     <a href="<?php echo esc_url($card->card_image); ?>" download class="pc-btn pc-btn-download-sm">
                                         <?php _e('Download', 'personalized-cards'); ?>
@@ -165,11 +221,26 @@ function pc_my_card_shortcode() {
         <?php endif; ?>
 
         <p class="pc-logout-link">
-            <a href="<?php echo esc_url(wp_logout_url(get_permalink(get_option('pc_login_page_id')))); ?>">
-                <?php _e('Log Out', 'personalized-cards'); ?>
-            </a>
+            <a href="<?php echo esc_url(wp_logout_url(get_permalink(get_option('pc_login_page_id')))); ?>"><?php _e('Log Out', 'personalized-cards'); ?></a>
         </p>
     </div>
+
+    <?php if (!empty($latest) && !empty($latest->card_back_image)): ?>
+    <script>
+    (function(){
+        document.querySelectorAll('.pc-my-card-wrap .pc-flip-tabs').forEach(function(tabs){
+            var viewer = tabs.closest('.pc-card-viewer');
+            tabs.querySelectorAll('.pc-flip-tab').forEach(function(tab){
+                tab.addEventListener('click', function(){
+                    var face = tab.getAttribute('data-face');
+                    tabs.querySelectorAll('.pc-flip-tab').forEach(function(t){ t.classList.toggle('is-active', t === tab); });
+                    viewer.querySelectorAll('.pc-card-face').forEach(function(img){ img.classList.toggle('is-active', img.getAttribute('data-face') === face); });
+                });
+            });
+        });
+    })();
+    </script>
+    <?php endif; ?>
     <?php
     return ob_get_clean();
 }

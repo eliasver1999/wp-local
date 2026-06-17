@@ -35,34 +35,127 @@ function pc_add_admin_menu() {
 function pc_admin_page() {
     global $wpdb;
     $table = $wpdb->prefix . 'personalized_cards';
+    $um    = $wpdb->usermeta;
+    $today = current_time('Y-m-d');
+    $in30  = date('Y-m-d', strtotime($today . ' +30 days'));
 
-    $total_cards    = $wpdb->get_var("SELECT COUNT(*) FROM $table");
-    $cards_today    = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE DATE(created_at) = %s", current_time('Y-m-d')));
-    $active_members = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->usermeta} WHERE meta_key = 'pc_subscription_active' AND meta_value = '1'");
-    $total_users    = count_users();
+    // ── KPIs ──────────────────────────────────────────────────────────────
+    $total_cards     = (int) $wpdb->get_var("SELECT COUNT(*) FROM $table");
+    $cards_month     = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE created_at >= %s", current_time('Y-m-01') . ' 00:00:00'));
+    $active_members  = (int) $wpdb->get_var("SELECT COUNT(*) FROM $um WHERE meta_key = 'pc_subscription_active' AND meta_value = '1'");
+    $expired_members = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $um WHERE meta_key = 'pc_subscription_expiry' AND meta_value <> '' AND meta_value < %s", $today));
+    $expiring_soon   = (int) $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $um WHERE meta_key = 'pc_subscription_expiry' AND meta_value >= %s AND meta_value <= %s", $today, $in30));
 
+    // Apple Wallet device registrations (table may be absent on older installs).
+    $reg_table      = $wpdb->prefix . 'pc_wallet_registrations';
+    $wallet_devices = ($wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $reg_table)) === $reg_table)
+        ? (int) $wpdb->get_var("SELECT COUNT(*) FROM $reg_table")
+        : 0;
+
+    // ── Cards issued per month (last 6) ───────────────────────────────────
+    $monthly = $wpdb->get_results($wpdb->prepare(
+        "SELECT DATE_FORMAT(created_at, '%%Y-%%m') ym, COUNT(*) c FROM $table WHERE created_at >= %s GROUP BY ym",
+        date('Y-m-01', strtotime('-5 months'))
+    ));
+    $buckets = array();
+    for ($i = 5; $i >= 0; $i--) { $buckets[date('Y-m', strtotime("-$i months"))] = 0; }
+    foreach ($monthly as $r) { if (isset($buckets[$r->ym])) $buckets[$r->ym] = (int) $r->c; }
+    $max_month = max(1, max($buckets));
+
+    // ── Status breakdown for the stacked bar ──────────────────────────────
+    $active_only  = max(0, $active_members - $expiring_soon);
+    $break_total  = max(1, $active_only + $expiring_soon + $expired_members);
+
+    $recent = class_exists('PC_Activity_Log') ? PC_Activity_Log::get_recent(8) : array();
     ?>
     <div class="wrap">
         <h1><?php _e('Personalized Cards', 'personalized-cards'); ?></h1>
 
-        <!-- Stats -->
+        <!-- KPIs -->
         <div class="pc-admin-stats">
-            <div class="pc-stat-box">
-                <h3><?php echo number_format($total_cards); ?></h3>
-                <p><?php _e('Total Cards', 'personalized-cards'); ?></p>
-            </div>
-            <div class="pc-stat-box">
-                <h3><?php echo number_format($cards_today); ?></h3>
-                <p><?php _e('Cards Today', 'personalized-cards'); ?></p>
-            </div>
             <div class="pc-stat-box">
                 <h3><?php echo number_format($active_members); ?></h3>
                 <p><?php _e('Active Members', 'personalized-cards'); ?></p>
             </div>
             <div class="pc-stat-box">
-                <h3><?php echo number_format($total_users['total_users']); ?></h3>
-                <p><?php _e('Total Users', 'personalized-cards'); ?></p>
+                <h3><?php echo number_format($expiring_soon); ?></h3>
+                <p><?php _e('Expiring in 30 days', 'personalized-cards'); ?></p>
             </div>
+            <div class="pc-stat-box">
+                <h3><?php echo number_format($expired_members); ?></h3>
+                <p><?php _e('Expired', 'personalized-cards'); ?></p>
+            </div>
+            <div class="pc-stat-box">
+                <h3><?php echo number_format($total_cards); ?></h3>
+                <p><?php _e('Total Cards', 'personalized-cards'); ?></p>
+            </div>
+            <div class="pc-stat-box">
+                <h3><?php echo number_format($cards_month); ?></h3>
+                <p><?php _e('Cards This Month', 'personalized-cards'); ?></p>
+            </div>
+            <div class="pc-stat-box">
+                <h3><?php echo number_format($wallet_devices); ?></h3>
+                <p><?php _e('Wallet Devices', 'personalized-cards'); ?></p>
+            </div>
+        </div>
+
+        <!-- Analytics -->
+        <div class="pc-analytics">
+            <div class="pc-analytics-card">
+                <h2><?php _e('Cards issued — last 6 months', 'personalized-cards'); ?></h2>
+                <div class="pc-bars">
+                    <?php foreach ($buckets as $ym => $count): ?>
+                        <div class="pc-bar-col" title="<?php echo esc_attr(sprintf(__('%1$s: %2$d cards', 'personalized-cards'), $ym, $count)); ?>">
+                            <span class="pc-bar-count"><?php echo number_format($count); ?></span>
+                            <span class="pc-bar" style="height:<?php echo (int) round(($count / $max_month) * 100); ?>%"></span>
+                            <span class="pc-bar-label"><?php echo esc_html(date_i18n('M', strtotime($ym . '-01'))); ?></span>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div class="pc-analytics-card">
+                <h2><?php _e('Membership status', 'personalized-cards'); ?></h2>
+                <?php if ($break_total <= 1 && !$active_members && !$expired_members): ?>
+                    <p class="description"><?php _e('No membership data yet.', 'personalized-cards'); ?></p>
+                <?php else: ?>
+                    <div class="pc-stacked">
+                        <span class="pc-seg pc-seg-active"  style="width:<?php echo round($active_only / $break_total * 100); ?>%"></span>
+                        <span class="pc-seg pc-seg-soon"    style="width:<?php echo round($expiring_soon / $break_total * 100); ?>%"></span>
+                        <span class="pc-seg pc-seg-expired" style="width:<?php echo round($expired_members / $break_total * 100); ?>%"></span>
+                    </div>
+                    <ul class="pc-legend">
+                        <li><span class="pc-dot pc-seg-active"></span><?php printf(__('Active: %d', 'personalized-cards'), $active_only); ?></li>
+                        <li><span class="pc-dot pc-seg-soon"></span><?php printf(__('Expiring soon: %d', 'personalized-cards'), $expiring_soon); ?></li>
+                        <li><span class="pc-dot pc-seg-expired"></span><?php printf(__('Expired: %d', 'personalized-cards'), $expired_members); ?></li>
+                    </ul>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <!-- Recent activity -->
+        <div class="pc-admin-section">
+            <h2><?php _e('Recent Activity', 'personalized-cards'); ?></h2>
+            <?php if (empty($recent)): ?>
+                <p class="description"><?php _e('No activity logged yet.', 'personalized-cards'); ?></p>
+            <?php else: ?>
+                <table class="pc-activity-table widefat striped">
+                    <tbody>
+                    <?php foreach ($recent as $row):
+                        $who = $row->user_id ? get_userdata($row->user_id) : null; ?>
+                        <tr>
+                            <td><code><?php echo esc_html($row->action); ?></code></td>
+                            <td><?php echo esc_html($row->note); ?></td>
+                            <td><?php echo $who ? esc_html($who->display_name) : '—'; ?></td>
+                            <td class="pc-activity-time"><?php echo esc_html(human_time_diff(strtotime($row->created_at), current_time('timestamp'))) . ' ' . __('ago', 'personalized-cards'); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                <p style="margin:10px 0 0;">
+                    <a href="<?php echo esc_url(admin_url('admin.php?page=personalized-cards-log')); ?>"><?php _e('View all activity →', 'personalized-cards'); ?></a>
+                </p>
+            <?php endif; ?>
         </div>
 
         <!-- Create card for user -->

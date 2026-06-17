@@ -40,6 +40,89 @@
     background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
 }
 
+.pc-stat-box:nth-child(5) {
+    background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+}
+
+.pc-stat-box:nth-child(6) {
+    background: linear-gradient(135deg, #30cfd0 0%, #330867 100%);
+}
+
+/* ── Analytics ──────────────────────────────────────────── */
+.pc-analytics {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 20px;
+    margin: 24px 0;
+}
+@media (max-width: 960px) { .pc-analytics { grid-template-columns: 1fr; } }
+
+.pc-analytics-card {
+    background: #fff;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    padding: 20px 24px;
+}
+.pc-analytics-card h2 {
+    margin: 0 0 18px;
+    font-size: 15px;
+    color: #1d2327;
+}
+
+/* Bar chart */
+.pc-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 10px;
+    height: 180px;
+}
+.pc-bar-col {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+}
+.pc-bar-count { font-size: 12px; color: #50575e; margin-bottom: 4px; }
+.pc-bar {
+    width: 70%;
+    min-height: 3px;
+    border-radius: 6px 6px 0 0;
+    background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+    transition: height .4s ease;
+}
+.pc-bar-label { font-size: 12px; color: #787c82; margin-top: 8px; }
+
+/* Stacked status bar */
+.pc-stacked {
+    display: flex;
+    height: 22px;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #eef0f3;
+}
+.pc-seg { display: block; height: 100%; }
+.pc-seg-active  { background: #1a9c5b; }
+.pc-seg-soon    { background: #d98a00; }
+.pc-seg-expired { background: #c0392b; }
+
+.pc-legend {
+    list-style: none;
+    margin: 16px 0 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+}
+.pc-legend li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #3c434a; }
+.pc-dot { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+/* Recent activity */
+.pc-activity-table td { vertical-align: middle; }
+.pc-activity-time { color: #787c82; white-space: nowrap; text-align: right; }
+
 .pc-delete-card {
     color: #a00;
 }

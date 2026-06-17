@@ -366,55 +366,124 @@
 
 /* ── My Card page ───────────────────────────────────────── */
 .pc-my-card-wrap {
-    max-width: 680px;
+    max-width: 720px;
     margin: 0 auto;
-    padding: 20px;
+    padding: 24px 20px 32px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1d2327;
 }
 
-.pc-member-info {
-    background: #e7f3ff;
-    border-left: 4px solid #0073aa;
-    padding: 12px 16px;
-    margin-bottom: 24px;
-    border-radius: 0 4px 4px 0;
+/* Header */
+.pc-mc-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 18px;
 }
-
-.pc-expiry-notice { margin: 4px 0 0; font-size: 14px; }
-.pc-expiry-notice.pc-expired { color: #c0392b; }
-
-.pc-no-card {
-    text-align: center;
-    padding: 40px;
-    color: #666;
-    font-style: italic;
-}
-
-.pc-card-display {
-    background: #fff;
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-}
-
-.pc-card-image-wrap {
-    position: relative;
-    display: inline-block;
-    width: 100%;
-}
-
-.pc-card-image-wrap img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 4px;
+.pc-mc-avatar img {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 6px rgba(0,0,0,.15);
     display: block;
 }
+.pc-mc-identity { flex: 1 1 auto; min-width: 0; }
+.pc-mc-name { margin: 0; font-size: 20px; line-height: 1.2; }
+.pc-mc-memberid { margin: 2px 0 0; font-size: 13px; color: #6b7280; }
 
-/* Expired overlay */
-.pc-card-expired img {
-    filter: grayscale(60%) brightness(0.85);
+.pc-status-badge {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    border-radius: 999px;
+    color: #fff;
+}
+.pc-badge-active  { background: #1a9c5b; }
+.pc-badge-soon    { background: #d98a00; }
+.pc-badge-expired { background: #c0392b; }
+
+/* Status meter */
+.pc-mc-status { margin-bottom: 22px; }
+.pc-meter {
+    height: 8px;
+    background: #e6e8eb;
+    border-radius: 999px;
+    overflow: hidden;
+}
+.pc-meter-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    background: #1a9c5b;
+    transition: width .4s ease;
+}
+.pc-status-soon .pc-meter-fill { background: #d98a00; }
+.pc-mc-status-text { margin: 8px 2px 0; font-size: 13px; color: #4b5563; }
+.pc-mc-expired-text { color: #c0392b; font-weight: 600; }
+
+/* No card */
+.pc-no-card {
+    text-align: center;
+    padding: 48px 24px;
+    color: #6b7280;
+    background: #f7f8fa;
+    border: 1px dashed #d3d7dd;
+    border-radius: 12px;
+}
+.pc-no-card p { margin: 0; }
+
+/* Card display */
+.pc-card-display {
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.08);
 }
 
+.pc-card-viewer { width: 100%; text-align: center; }
+.pc-card-stage {
+    position: relative;
+    width: 100%;
+    border-radius: 10px;
+    overflow: hidden;
+    background: #f1f3f5;
+}
+.pc-card-face {
+    width: 100%;
+    height: auto;
+    display: none;
+}
+.pc-card-face.is-active { display: block; }
+
+/* Flip tabs */
+.pc-flip-tabs {
+    display: inline-flex;
+    margin: 12px auto 0;
+    background: #eef0f3;
+    border-radius: 999px;
+    padding: 3px;
+    gap: 2px;
+}
+.pc-flip-tab {
+    border: none;
+    background: transparent;
+    padding: 6px 18px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4b5563;
+    cursor: pointer;
+}
+.pc-flip-tab.is-active { background: #fff; color: #111; box-shadow: 0 1px 3px rgba(0,0,0,.15); }
+
+/* Expired overlay */
+.pc-card-expired .pc-card-face { filter: grayscale(60%) brightness(0.85); }
 .pc-expired-overlay {
     position: absolute;
     inset: 0;
@@ -423,7 +492,6 @@
     justify-content: center;
     pointer-events: none;
 }
-
 .pc-expired-overlay span {
     background: rgba(180, 0, 0, 0.82);
     color: #fff;
@@ -438,74 +506,79 @@
     user-select: none;
 }
 
-.pc-btn-disabled {
-    background: #ccc !important;
-    color: #888 !important;
-    cursor: not-allowed;
-    opacity: .7;
-}
+.pc-card-date { margin: 14px 2px 0; font-size: 13px; color: #9aa0a6; }
 
-.pc-renew-msg {
-    width: 100%;
-    margin-top: 10px;
-    font-size: 13px;
-    color: #c0392b;
-    font-style: italic;
-}
-
+/* Actions */
 .pc-card-actions {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
     margin-top: 16px;
 }
-
 .pc-btn {
-    display: inline-block;
-    padding: 10px 20px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 20px;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
     font-size: 14px;
     font-weight: 600;
     text-decoration: none;
-    transition: opacity .2s;
+    transition: transform .12s ease, box-shadow .12s ease, opacity .2s;
 }
-.pc-btn:hover { opacity: .85; }
+.pc-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.18); }
+.pc-btn-ico { font-size: 15px; line-height: 1; }
+.pc-btn-download      { background: #0073aa; color: #fff !important; }
+.pc-btn-apple-wallet  { background: #000;    color: #fff !important; }
+.pc-btn-google-wallet { background: #1a73e8; color: #fff !important; }
+.pc-btn-disabled {
+    background: #e3e6ea !important;
+    color: #9aa0a6 !important;
+    cursor: not-allowed;
+}
+.pc-btn-disabled:hover { transform: none; box-shadow: none; }
+.pc-btn-download-sm {
+    background: #0073aa; color: #fff !important;
+    font-size: 12px; padding: 6px 12px; border-radius: 6px;
+}
 
-.pc-btn-download  { background: #0073aa; color: #fff !important; }
-.pc-btn-apple-wallet { background: #000; color: #fff !important; }
-.pc-btn-google-wallet { background: #4285f4; color: #fff !important; }
-.pc-btn-download-sm { background: #0073aa; color: #fff !important; font-size: 12px; padding: 6px 12px; }
-
-.pc-card-date {
+.pc-renew-msg {
+    width: 100%;
     margin-top: 12px;
     font-size: 13px;
-    color: #888;
+    color: #c0392b;
 }
 
-.pc-previous-cards {
-    margin-top: 32px;
+/* Previous cards */
+.pc-previous-cards { margin-top: 32px; }
+.pc-previous-cards h3 { font-size: 15px; color: #4b5563; margin: 0 0 12px; }
+.pc-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 14px;
 }
+.pc-card-item {
+    background: #fff;
+    border: 1px solid #e3e6ea;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+}
+.pc-card-item img { width: 100%; height: auto; border-radius: 6px; display: block; margin-bottom: 8px; }
+.pc-card-item p { margin: 0 0 8px; font-size: 12px; color: #6b7280; }
 
 .pc-logout-link {
-    margin-top: 24px;
+    margin-top: 28px;
     font-size: 13px;
     text-align: right;
 }
+.pc-logout-link a { color: #6b7280; }
 
 /* ── Responsive */
-@media (max-width: 768px) {
-    .pc-card-creator {
-        padding: 15px;
-    }
-    
-    .pc-action-buttons {
-        flex-direction: column;
-    }
-    
-    .pc-download-btn,
-    .pc-wallet-btn {
-        min-width: 100%;
-    }
+@media (max-width: 600px) {
+    .pc-mc-header { flex-wrap: wrap; }
+    .pc-status-badge { order: 3; }
+    .pc-card-actions .pc-btn { flex: 1 1 100%; justify-content: center; }
 }
