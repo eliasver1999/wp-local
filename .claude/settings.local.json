@@ -10,7 +10,29 @@
       "PowerShell($paths = @\\(\"C:\\\\xampp\\\\php\\\\php.exe\",\"C:\\\\php\\\\php.exe\",\"C:\\\\Program Files\\\\PHP\\\\php.exe\"\\); $found = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1; if \\($found\\) { & $found -l \"C:\\\\Users\\\\apetr\\\\codebase\\\\wetransfer_wp-local_2026-04-28_1151\\\\wp-local\\\\includes\\\\admin\\\\admin-page.php\" } else { \"no php found\" })",
       "Bash(composer --version)",
       "Bash(php --version)",
-      "Bash(grep -rn '$pass->get\\(\\)\\\\|create\\(true\\)\\\\|setWWDRcertPath\\\\|setCertificate\\\\|create\\(false\\)' includes/class-wallet-handler.php)"
+      "Bash(grep -rn '$pass->get\\(\\)\\\\|create\\(true\\)\\\\|setWWDRcertPath\\\\|setCertificate\\\\|create\\(false\\)' includes/class-wallet-handler.php)",
+      "Bash(ls \"C:/Users/apetr/Downloads/ΣΕΟ_ΟΛΥΜΠΙΟΝΙΚΕΣ.xlsx\")",
+      "Bash(python -c \"import openpyxl; print\\('ok'\\)\")",
+      "Bash(python -c ' *)",
+      "Bash(PYTHONUTF8=1 python -c ' *)",
+      "Read(//c/Users/apetr/Local Sites/**)",
+      "Read(//c/Users/apetr/**)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(v.get\\('name'\\),'->',v.get\\('domain'\\)\\) for v in d.values\\(\\)]\")",
+      "Read(//c/Users/apetr/AppData/Roaming/Local/**)",
+      "Bash(curl -s -o /dev/null -w \"https -> %{http_code}\\\\n\" -k --max-time 8 https://test2.local/)",
+      "Bash(curl -s -o /dev/null -w \"http  -> %{http_code}\\\\n\" --max-time 8 http://test2.local/)",
+      "Bash(grep -i 'imagecreate\\\\|file_get_contents\\\\|wp_remote\\\\|fopen\\\\|curl\\\\|url2path\\\\|attachment\\\\|$image\\\\|photo')",
+      "Bash(C:/Users/apetr/AppData/Local/Programs/Local/resources/extraResources/lightning-services/mysql-8.4.0/bin/win64/bin/mysql.exe -h 127.0.0.1 -P 10011 -u root -proot local -N -e 'SELECT option_name, option_value FROM wp_options WHERE option_name IN \\('\\\\''siteurl'\\\\'','\\\\''home'\\\\''\\);')",
+      "Bash(C:/Users/apetr/AppData/Local/Programs/Local/resources/extraResources/lightning-services/mysql-8.4.0/bin/win64/bin/mysql.exe -h 127.0.0.1 -P 10011 -u root -proot local -N -e 'SELECT COUNT\\(*\\) FROM wp_personalized_cards;')",
+      "Bash(C:/Users/apetr/AppData/Local/Programs/Local/resources/extraResources/lightning-services/mysql-8.4.0/bin/win64/bin/mysql.exe -h 127.0.0.1 -P 10011 -u root -proot local -e 'TRUNCATE TABLE wp_personalized_cards;')",
+      "Bash(C:/Users/apetr/AppData/Local/Programs/Local/resources/extraResources/lightning-services/mysql-8.4.0/bin/win64/bin/mysql.exe -h 127.0.0.1 -P 10011 -u root -proot local -N -e 'SELECT CONCAT\\('\\\\''Members with active membership: '\\\\'', COUNT\\(*\\)\\) FROM wp_usermeta WHERE meta_key='\\\\''pc_subscription_active'\\\\'' AND meta_value='\\\\''1'\\\\''; SELECT CONCAT\\('\\\\''Members with a photo: '\\\\'', COUNT\\(*\\)\\) FROM wp_usermeta WHERE meta_key='\\\\''pc_member_image'\\\\'' AND meta_value<>'\\\\'''\\\\'';')",
+      "Bash(PHPDIR=\"C:/Users/apetr/AppData/Local/Programs/Local/resources/extraResources/lightning-services/php-8.2.29+0/bin/win64\" *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(curl -s -o /dev/null -w \"Mailpit \\(test2\\) http://localhost:10006 -> %{http_code}\\\\n\" --max-time 6 http://localhost:10006/)",
+      "Bash(curl -s --max-time 6 http://localhost:10006/api/v1/messages)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Captured messages:', d.get\\('total','?'\\)\\)\")"
     ]
   }
 }
