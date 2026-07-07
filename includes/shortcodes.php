@@ -59,7 +59,7 @@ function pc_my_card_shortcode() {
     }
 
     // ── Presentation data ──────────────────────────────────────────
-    $member_photo = get_user_meta($user_id, 'pc_member_image', true);
+    $member_photo = pc_resolve_member_image($user_id);
     $member_id    = get_user_meta($user_id, 'pc_member_id', true);
     $started      = get_user_meta($user_id, 'pc_subscription_started', true);
 

@@ -1848,7 +1848,7 @@ function pc_ajax_admin_create_card() {
     if ($member_id === '') $member_id = (string) (get_user_meta($user_id, 'pc_member_id', true) ?: $user_id);
 
     $member_image = esc_url_raw($_POST['member_image'] ?? '');
-    if ($member_image === '') $member_image = (string) get_user_meta($user_id, 'pc_member_image', true);
+    if ($member_image === '') $member_image = pc_resolve_member_image($user_id, $member_id);
 
     $card_data = array(
         'name'        => $card_name,
@@ -2052,7 +2052,7 @@ function pc_admin_process_create_and_email_for_user($user_id) {
         'father_name' => (string) get_user_meta($user_id, 'pc_father_name', true),
         'sport'       => (string) get_user_meta($user_id, 'pc_sport', true),
         'member_id'   => (string) (get_user_meta($user_id, 'pc_member_id', true) ?: $user_id),
-        'image'       => (string) get_user_meta($user_id, 'pc_member_image', true),
+        'image'       => pc_resolve_member_image($user_id),
         'message'     => '',
         'date'        => $expiry_date ? date('Y-m-d', strtotime($expiry_date)) : '',
     );

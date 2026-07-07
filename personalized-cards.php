@@ -21,6 +21,7 @@ define('PC_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PC_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 // Include required files
+require_once PC_PLUGIN_DIR . 'includes/helpers.php';
 require_once PC_PLUGIN_DIR . 'includes/class-database.php';
 require_once PC_PLUGIN_DIR . 'includes/class-activity-log.php';
 require_once PC_PLUGIN_DIR . 'includes/class-card-creator.php';
