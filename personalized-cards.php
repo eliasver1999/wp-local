@@ -3,7 +3,7 @@
  * Plugin Name: Personalized Cards Creator
  * Plugin URI: https://yoursite.com
  * Description: Create personalized cards with email delivery and digital wallet integration
- * Version: 2.0.0
+ * Version: 2.0.2
  * Author: Your Name
  * Author URI: https://yoursite.com
  * License: GPL v2 or later
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('PC_VERSION', '2.0.0');
+define('PC_VERSION', '2.0.2');
 define('PC_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PC_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -45,21 +45,10 @@ if (file_exists(PC_PLUGIN_DIR . 'vendor/autoload.php')) {
 // Activation hook
 register_activation_hook(__FILE__, 'pc_activate_plugin');
 function pc_activate_plugin() {
-    PC_Database::create_tables();
-    PC_Activity_Log::create_table();
-    PC_Wallet_WebService::create_table();
-    update_option('pc_wallet_ws_db_version', '1');
-    PC_Cron::register();
-
-    // Create uploads directory for cards
-    $upload_dir = wp_upload_dir();
-    $cards_dir = $upload_dir['basedir'] . '/personalized-cards';
-    if (!file_exists($cards_dir)) {
-        wp_mkdir_p($cards_dir);
-    }
-
-    pc_create_plugin_pages();
-    flush_rewrite_rules();
+    // DIAGNOSTIC BUILD: activation intentionally does nothing.
+    // All setup (tables, pages) is handled idempotently on load by
+    // pc_init_plugin(), so the plugin stays fully functional without
+    // doing any work at activation time.
 }
 
 function pc_create_plugin_pages() {
@@ -101,6 +90,30 @@ register_deactivation_hook(__FILE__, 'pc_deactivate_plugin');
 function pc_deactivate_plugin() {
     PC_Cron::unregister();
     flush_rewrite_rules();
+}
+
+// One-time setup, deferred out of the activation hook. Runs on the first
+// admin load after activation, so activation itself does no heavy work.
+add_action('admin_init', 'pc_maybe_setup');
+function pc_maybe_setup() {
+    if (get_option('pc_setup_done') === '1') {
+        return;
+    }
+    PC_Database::create_tables();
+    PC_Activity_Log::create_table();
+    PC_Wallet_WebService::create_table();
+    update_option('pc_wallet_ws_db_version', '1');
+    PC_Cron::register();
+
+    $upload_dir = wp_upload_dir();
+    $cards_dir  = $upload_dir['basedir'] . '/personalized-cards';
+    if (!file_exists($cards_dir)) {
+        wp_mkdir_p($cards_dir);
+    }
+
+    pc_create_plugin_pages();
+    flush_rewrite_rules();
+    update_option('pc_setup_done', '1');
 }
 
 // Initialize plugin
