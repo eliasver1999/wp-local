@@ -3,7 +3,7 @@
  * Plugin Name: Personalized Cards Creator
  * Plugin URI: https://yoursite.com
  * Description: Create personalized cards with email delivery and digital wallet integration
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: Your Name
  * Author URI: https://yoursite.com
  * License: GPL v2 or later
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('PC_VERSION', '2.0.3');
+define('PC_VERSION', '2.0.4');
 define('PC_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('PC_PLUGIN_URL', plugin_dir_url(__FILE__));
 

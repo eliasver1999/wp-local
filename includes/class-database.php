@@ -28,7 +28,46 @@ class PC_Database {
     public static function save_card($user_id, $template, $data, $subscription_level) {
         global $wpdb;
         $table_name = $wpdb->prefix . 'personalized_cards';
-        
+
+        // One card per user: reuse the existing row if the user already has a card.
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT id, card_image, card_back_image FROM $table_name WHERE user_id = %d ORDER BY id DESC LIMIT 1",
+            $user_id
+        ));
+
+        if ($existing) {
+            // Remove any extra duplicate rows for this user (keep the one we update).
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM $table_name WHERE user_id = %d AND id <> %d",
+                $user_id, $existing->id
+            ));
+
+            // Delete the old image files — a fresh image is generated right after this.
+            $upload = wp_upload_dir();
+            foreach (array($existing->card_image, $existing->card_back_image) as $old_url) {
+                if (!$old_url) continue;
+                $old_path = str_replace($upload['baseurl'], $upload['basedir'], $old_url);
+                if ($old_path !== $old_url && file_exists($old_path)) {
+                    @unlink($old_path);
+                }
+            }
+
+            $wpdb->update(
+                $table_name,
+                array(
+                    'card_template'      => $template,
+                    'card_data'          => json_encode($data),
+                    'subscription_level' => $subscription_level,
+                    'card_image'         => null,
+                    'card_back_image'    => null,
+                ),
+                array('id' => $existing->id),
+                array('%s', '%s', '%s', '%s', '%s'),
+                array('%d')
+            );
+            return (int) $existing->id;
+        }
+
         $wpdb->insert(
             $table_name,
             array(
@@ -39,7 +78,7 @@ class PC_Database {
             ),
             array('%d', '%s', '%s', '%s')
         );
-        
+
         return $wpdb->insert_id;
     }
     
