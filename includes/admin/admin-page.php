@@ -1917,7 +1917,7 @@ function pc_ajax_admin_create_card() {
     $msg = sprintf(__('Card created for %s.', 'personalized-cards'), $user->display_name);
 
     if ($send_email) {
-        $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url, $generated_back_path, $pkpass_path);
+        $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url, $generated_back_path, $pkpass_path, $user_id);
         $msg .= $sent
             ? ' ' . __('Email sent.', 'personalized-cards')
             : ' ' . __('Card created but email failed.', 'personalized-cards');
@@ -1975,7 +1975,7 @@ function pc_ajax_admin_send_card_email() {
         if (!file_exists($back_file)) $back_file = '';
     }
 
-    $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
+    $sent = PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file, '', $user->ID);
 
     if ($sent) {
         PC_Activity_Log::log('card_emailed', 'Card emailed to ' . $user->user_email, $user->ID);
@@ -2026,7 +2026,7 @@ function pc_admin_process_create_and_email_for_user($user_id) {
                 $b = str_replace($upload_dir['baseurl'], $upload_dir['basedir'], $existing->card_back_image);
                 if (file_exists($b)) $back_file = $b;
             }
-            $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file);
+            $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $file_path, '', $back_file, '', $user_id);
             if (!$emailed) {
                 $smtp = PC_Email_Handler::get_last_error();
                 $error = $smtp
@@ -2094,7 +2094,7 @@ function pc_admin_process_create_and_email_for_user($user_id) {
         if (!is_wp_error($pk)) $pkpass_path = $pk;
     }
 
-    $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url, '', $pkpass_path);
+    $emailed = (bool) PC_Email_Handler::send_card_email($user->user_email, $user->display_name, $output_path, $wallet_url, '', $pkpass_path, $user_id);
 
     if ($pkpass_path && file_exists($pkpass_path)) {
         @unlink($pkpass_path);

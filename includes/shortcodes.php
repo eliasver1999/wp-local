@@ -185,9 +185,11 @@ function pc_my_card_shortcode() {
                     <?php if (get_option('pc_enable_google_wallet') && !$is_expired):
                         $gw_link = PC_Wallet_Handler::create_google_wallet_link($card_data, $user_id, $latest->card_image);
                         $gw_link = is_wp_error($gw_link) ? false : $gw_link;
-                        if ($gw_link): ?>
-                            <a href="<?php echo esc_url($gw_link); ?>" target="_blank" rel="noopener" class="pc-btn pc-btn-google-wallet">
-                                <?php _e('Add to Google Wallet', 'personalized-cards'); ?>
+                        if ($gw_link):
+                            $gw_badge = PC_PLUGIN_URL . 'assets/images/add-to-google-wallet.png';
+                        ?>
+                            <a href="<?php echo esc_url($gw_link); ?>" target="_blank" rel="noopener" class="pc-btn-google-wallet-badge" style="display:inline-block;">
+                                <img src="<?php echo esc_url($gw_badge); ?>" alt="<?php esc_attr_e('Add to Google Wallet', 'personalized-cards'); ?>" style="height:52px;width:auto;border:0;">
                             </a>
                         <?php endif;
                     endif; ?>

@@ -133,7 +133,19 @@ class PC_Email_Handler {
         </body></html>';
     }
 
-    public static function send_card_email($user_email, $user_name, $card_image_path, $google_wallet_url = '', $card_back_image_path = '', $pkpass_path = '') {
+    public static function send_card_email($user_email, $user_name, $card_image_path, $google_wallet_url = '', $card_back_image_path = '', $pkpass_path = '', $user_id = 0) {
+        // Never email an expired/inactive membership.
+        if ($user_id && function_exists('pc_membership_is_expired') && pc_membership_is_expired($user_id)) {
+            self::$last_error = __('Membership expired — card email not sent.', 'personalized-cards');
+            return false;
+        }
+
+        // Ensure the "Add to Google Wallet" button shows on every send path:
+        // if the caller didn't pass a link, build one from the member's card.
+        if ($google_wallet_url === '' && $user_id && function_exists('pc_google_wallet_link_for_user')) {
+            $google_wallet_url = pc_google_wallet_link_for_user($user_id);
+        }
+
         $from_name = get_option('pc_email_from_name', get_bloginfo('name'));
         $from_email = get_option('pc_email_from_address', get_bloginfo('admin_email'));
         $subject = get_option('pc_email_subject', __('Your Personalized Card', 'personalized-cards'));
@@ -183,9 +195,8 @@ class PC_Email_Handler {
                     <p>Your personalized card is attached to this email. You can download it for printing or sharing on social media.</p>
                     ' . ($google_wallet_url ? '
                     <div style="text-align:center;margin:24px 0;">
-                        <a href="' . esc_url($google_wallet_url) . '" target="_blank"
-                           style="display:inline-block;background:#000;color:#fff;text-decoration:none;padding:12px 24px;border-radius:6px;font-size:15px;font-family:Arial,sans-serif;">
-                            🎫 Add to Google Wallet
+                        <a href="' . esc_url($google_wallet_url) . '" target="_blank" style="text-decoration:none;">
+                            <img src="cid:gw_badge" alt="' . esc_attr__('Add to Google Wallet', 'personalized-cards') . '" style="height:52px;width:auto;border:0;display:inline-block;">
                         </a>
                     </div>' : '') . '
                     ' . (($pkpass_path && file_exists($pkpass_path)) ? '
@@ -201,11 +212,17 @@ class PC_Email_Handler {
         // Use WordPress PHPMailer. Bind to a named callback so we can remove it
         // after sending — otherwise repeated calls (bulk send) accumulate
         // closures and every recipient gets every previous user's attachments.
-        $attach_cb = function($phpmailer) use ($card_image_path, $card_back_image_path, $pkpass_path) {
+        $gw_badge_path = ($google_wallet_url && file_exists(PC_PLUGIN_DIR . 'assets/images/add-to-google-wallet.png'))
+            ? PC_PLUGIN_DIR . 'assets/images/add-to-google-wallet.png'
+            : '';
+        $attach_cb = function($phpmailer) use ($card_image_path, $card_back_image_path, $pkpass_path, $gw_badge_path) {
             $phpmailer->clearAttachments();
             if (file_exists($card_image_path)) {
                 $phpmailer->AddEmbeddedImage($card_image_path, 'card_image', basename($card_image_path));
                 $phpmailer->AddAttachment($card_image_path, basename($card_image_path));
+            }
+            if ($gw_badge_path) {
+                $phpmailer->AddEmbeddedImage($gw_badge_path, 'gw_badge', 'add-to-google-wallet.png');
             }
             if ($card_back_image_path && file_exists($card_back_image_path)) {
                 $phpmailer->AddEmbeddedImage($card_back_image_path, 'card_back_image', basename($card_back_image_path));

@@ -66,3 +66,46 @@ function pc_resolve_member_image($user_id, $member_id = '') {
 
     return '';
 }
+
+/**
+ * Is a member's subscription expired (or inactive)?
+ * Mirrors the logic used on the My Card page.
+ *
+ * @param int $user_id
+ * @return bool
+ */
+function pc_membership_is_expired($user_id) {
+    $active = get_user_meta($user_id, 'pc_subscription_active', true);
+    if ($active !== '1') {
+        return true;
+    }
+    $expiry = get_user_meta($user_id, 'pc_subscription_expiry', true);
+    if ($expiry && strtotime($expiry) && strtotime($expiry) < time()) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Build the "Save to Google Wallet" link for a member's latest card, or ''.
+ * Used so every card-email path can show the button without each caller
+ * regenerating it.
+ *
+ * @param int $user_id
+ * @return string
+ */
+function pc_google_wallet_link_for_user($user_id) {
+    if (get_option('pc_enable_google_wallet', '0') !== '1') {
+        return '';
+    }
+    if (!class_exists('PC_Wallet_Handler') || !class_exists('PC_Database')) {
+        return '';
+    }
+    $cards = PC_Database::get_user_cards($user_id);
+    if (empty($cards)) {
+        return '';
+    }
+    $card_data = json_decode($cards[0]->card_data, true) ?: array();
+    $link = PC_Wallet_Handler::create_google_wallet_link($card_data, $user_id, $cards[0]->card_image);
+    return is_wp_error($link) ? '' : $link;
+}
